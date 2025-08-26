@@ -89,7 +89,10 @@ export class World {
 
 	deleteBody (id: number) {
 		if (this.kinematics.has(id)) this.kinematics.delete(id);
-		if (this.dynamics.has(id)) this.dynamics.delete(id);
+		if (this.dynamics.has(id)) {
+			this.dynamics.delete(id);
+			this.controllers.delete(id);
+		}
 	}
 
 	get nextBodyId (): number {

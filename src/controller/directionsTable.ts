@@ -1,8 +1,11 @@
 import Vector3 from "../math/vector3.js"
 
 export default class DirectionsTable {
-	private static FP: number = 1 << 16;
+	public static readonly FP: number = 1 << 16;
+	public static readonly INV_SQRT2: number = 46341;
 	public static Directions: Vector3[] = [];
+	private static q90: number = 0;
+	private static q180: number = 0;
 
 	static generateDirectionsTable (N: number) {
 		const dirs: Vector3[] = [];
@@ -17,6 +20,8 @@ export default class DirectionsTable {
 			dirs.push(new Vector3(fx, 0, fz));
 		}
 		DirectionsTable.Directions = dirs;
+		DirectionsTable.q90 = dirs.length >> 2;
+		DirectionsTable.q180 = dirs.length >> 1;
 	}
 
 	static snapDirection (x: number, z: number): Vector3 {
@@ -48,5 +53,23 @@ export default class DirectionsTable {
 			}
 		}
 		return DirectionsTable.Directions[bestIdx];
+	}
+
+	static left (dir: number) {
+		const a = dir - DirectionsTable.q90;
+
+		return (a % DirectionsTable.Directions.length + DirectionsTable.Directions.length) % DirectionsTable.Directions.length;
+	}
+
+	static right (dir: number) {
+		const a = dir + DirectionsTable.q90;
+
+		return a % DirectionsTable.Directions.length;
+	}
+
+	static inverse (dir: number) {
+		const a = dir + DirectionsTable.q180;
+
+		return a % DirectionsTable.Directions.length;
 	}
 }

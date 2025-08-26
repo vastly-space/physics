@@ -1,4 +1,5 @@
 import Vector3 from '../math/vector3.js'
+import { divTrunc } from "../math/utils.js"
 import DynamicBody from "../physics/dynamicBody.js"
 import DirectionsTable from "./directionsTable.js"
 
@@ -57,26 +58,45 @@ export class Controller {
 	}
 
 	updateSpeed () {
-		this.body.velocity.set(0, this.body.velocity.y, 0);
-		const dirLength = DirectionsTable.Directions.length;
-		const indexOffset = Math.round(dirLength/4);
+		const dirLen = DirectionsTable.Directions.length;
+		const q90 = dirLen >> 2;
+		const q180 = dirLen >> 1;
 
-		if (this.state.forward) {
-			this.body.velocity.add(DirectionsTable.Directions[this._direction]);
-		}
-		if (this.state.right) {
-			this.body.velocity.add(DirectionsTable.Directions[(this._direction + indexOffset) % dirLength]);
-		}
-		if (this.state.left) {
-			this.body.velocity.add(DirectionsTable.Directions[Math.abs((this._direction - indexOffset) % dirLength)]);
-		}
-		if (this.state.backward) {
-			this.body.velocity.add(DirectionsTable.Directions[(this._direction + 2 * indexOffset) % dirLength]);
+		const vy = this.body.velocity.y;
+		this._body.velocity.set(0, vy, 0);
+
+		const f = (this._state.forward ? 1 : 0) - (this._state.backward ? 1 : 0);
+		const r = (this._state.right   ? 1 : 0) - (this._state.left     ? 1 : 0);
+
+		if (f === 0 && r === 0) {
+			return;
 		}
 
-		if (this.body.velocity.x !== 0 || this.body.velocity.z !== 0) {
-			// normalize speed
-			const maxComp = Math.max(this.body.velocity.x, this.body.velocity.y, this.body.velocity.z);
+		let vx = 0, vz = 0;
+
+		if (f !== 0) {
+			const dId = f > 0 ? this._direction : DirectionsTable.inverse(this._direction);
+			const dr = DirectionsTable.Directions[dId];
+			vx += dr.x;
+			vz += dr.z;
 		}
+
+		if (r !== 0) {
+			const dId = r > 0 ? DirectionsTable.right(this._direction) : DirectionsTable.left(this._direction);
+			const dr = DirectionsTable.Directions[dId];
+			vx += dr.x;
+			vz += dr.z;
+		}
+
+		// normalize if both active
+		if (f !== 0 && r !== 0) {
+			vx = Math.trunc((vx * DirectionsTable.INV_SQRT2) / DirectionsTable.FP);
+			vz = Math.trunc((vz * DirectionsTable.INV_SQRT2) / DirectionsTable.FP);
+		}
+
+		vx = Math.trunc((vx * this._speedMultiplier) / FP);
+	    vz = Math.trunc((vz * this._speedMultiplier) / FP);
+
+	    this._body.velocity.set(vx, vy, vz);
 	}
 }
