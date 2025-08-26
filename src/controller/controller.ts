@@ -94,8 +94,8 @@ export class Controller {
 			vz = Math.trunc((vz * DirectionsTable.INV_SQRT2) / DirectionsTable.FP);
 		}
 
-		vx = Math.trunc((vx * this._speedMultiplier) / FP);
-	    vz = Math.trunc((vz * this._speedMultiplier) / FP);
+		vx = Math.trunc((vx * this._speedMultiplier) / DirectionsTable.FP);
+	    vz = Math.trunc((vz * this._speedMultiplier) / DirectionsTable.FP);
 
 	    this._body.velocity.set(vx, vy, vz);
 	}

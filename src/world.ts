@@ -5,7 +5,7 @@ import { divTrunc } from "./math/utils.js"
 import StaticBody from "./physics/staticBody.js"
 import KinematicBody from "./physics/kinematicBody.js"
 import DynamicBody from "./physics/dynamicBody.js"
-import Controller from "./controller/controller.js"
+import { Controller } from "./controller/controller.js"
 import DirectionsTable from "./controller/directionsTable.js"
 
 type Body = StaticBody | KinematicBody | DynamicBody;
@@ -14,11 +14,13 @@ export interface WorldOptions {
 	worldCubeSize: number;
 	movementDirections: number;
 	gravity: number;
+	defaultSpeed: number;
 }
 
 export class World {
 	private _tick: number = 0;
 	private _gravity: number;
+	private defaultSpeed: number;
 	private bodyCounter: number = 0;
 	private statics: Octree;
 	private kinematics: Map<number, KinematicBody> = new Map();
@@ -27,12 +29,13 @@ export class World {
 
 	constructor (options: WorldOptions) {
 		const halfSize = divTrunc(options.worldCubeSize, 2);
-		this.static = new Octree(new AABB(
+		this.statics = new Octree(new AABB(
 			new Vector3(-halfSize, -halfSize, -halfSize),
 			new Vector3(halfSize, halfSize, halfSize)
 		));
 		DirectionsTable.generateDirectionsTable(options.movementDirections);
 		this._gravity = options.gravity;
+		this.defaultSpeed = options.defaultSpeed;
 	}
 
 	get tick (): number {
@@ -82,7 +85,7 @@ export class World {
 				break;
 			case "dynamic":
 				this.dynamics.set(body.id, body as DynamicBody);
-				this.controllers.set(body.id, new Controller())
+				this.controllers.set(body.id, new Controller(body as DynamicBody, this.defaultSpeed))
 				break;
 		}
 	}
@@ -93,6 +96,10 @@ export class World {
 			this.dynamics.delete(id);
 			this.controllers.delete(id);
 		}
+	}
+
+	getController (id: number): Controller | undefined {
+		return this.controllers.get(id);
 	}
 
 	get nextBodyId (): number {
