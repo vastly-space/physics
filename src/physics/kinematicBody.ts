@@ -14,16 +14,13 @@ export default class KinematicBody extends StaticBody {
 		return this._scriptMove;
 	}
 
-	set scriptMove (val: boolean) {
-		this._scriptMove = val;
-	}
-
 	get scriptPos (): Vector3 {
 		return this._scriptPos;
 	}
 
 	set scriptPos (val: Vector3) {
 		this._scriptPos = val;
+		this._scriptMove = true;
 	}
 
 	get motionDelta (): Vector3 {
@@ -53,5 +50,6 @@ export default class KinematicBody extends StaticBody {
 	    this._anchorPos.copy(this._position);
 		this._prevPos.copy(this._position);
 		this._scriptMove = false;
+		this._sweptAABB.copy(this._aabb);
 	}
 }

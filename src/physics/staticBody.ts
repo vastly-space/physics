@@ -1,6 +1,9 @@
 import Vector3 from "../math/vector3.js"
 import AABB from "../math/aabb.js"
+import { Octree } from "../math/octree.js"
+import type { OctItem } from "../math/octree.js"
 import type Shape from "./shape.js"
+import Trimesh from "./shapes/trimesh.js"
 
 export default class StaticBody {
 	protected readonly _kind: string = "static";
@@ -84,8 +87,42 @@ export default class StaticBody {
 		this._anchorTick = val;
 	}
 
-	snapshotAnchor(tick: number) {
-		this._anchorPos.copy(this._position);
-		this._anchorTick = tick;
+	octreeInsert (tree: Octree) {
+		for (let index=0; index<this._shapes.length; index++) {
+			const shape = this._shapes[index];
+			let item: OctItem;
+
+			switch (shape.type) {
+				case "box":
+					item = {
+						id: this._id,
+						shapeIndex: index,
+						aabb: shape.aabb,
+						layer: this._layer
+					}
+					tree.insert(item);
+					break;
+				case "sphere":
+					item = {
+						id: this._id,
+						shapeIndex: index,
+						aabb: shape.aabb,
+						layer: this._layer
+					}
+					tree.insert(item)
+					break;
+				case "trimesh":
+					for (let i=0; i<(shape as Trimesh).triangles.length; i++) {
+						tree.insert({
+							id: this._id,
+							shapeIndex: index,
+							triangleIndex: i,
+							aabb: (shape as Trimesh).triangles[i].getAABB(),
+							layer: this._layer
+						});
+					}
+					break;
+			}
+		}
 	}
 }

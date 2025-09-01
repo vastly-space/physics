@@ -3,7 +3,10 @@ import AABB from "./aabb.js"
 
 export interface OctItem {
 	id: number;
+	shapeIndex: number;
+	triangleIndex?: number;
 	aabb: AABB;
+	layer: number;
 }
 
 export class OctNode {
@@ -49,15 +52,16 @@ export class OctNode {
 		return true;
 	}
 
-	queryAABB(range: AABB, out: OctItem[]) {
+	queryAABB(range: AABB, out: OctItem[], mask: number) {
 		if (!this._bounds.overlaps(range)) return out;
 		
 		for (const it of this.items) {
+			if (mask !== 0 && it.layer !== 0 && ((mask & it.layer) === 0)) continue;
 			if (it.aabb.overlaps(range)) out.push(it);
 		}
 		
 		const c = this._children;
-		if (c[0]) for (let i=0;i<8;i++) c[i]!.queryAABB(range, out);
+		if (c[0]) for (let i=0;i<8;i++) c[i]!.queryAABB(range, out, mask);
 
 		return out;
 	}
@@ -139,5 +143,7 @@ export class Octree {
 
 	insert(it: OctItem) { this.root.insert(it, this.MAX_ITEMS, this.MAX_DEPTH); }
 
-	queryAABB(range: AABB, out: OctItem[] = []) { return this.root.queryAABB(range, out); }
+	queryAABB(range: AABB, out: OctItem[] = [], mask: number = 0) {
+		return this.root.queryAABB(range, out, mask);
+	}
 }

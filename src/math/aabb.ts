@@ -54,9 +54,15 @@ export default class AABB {
 		return this;
 	}
 
-	expandAABB(other: AABB): AABB {
+	expandAABB (other: AABB): AABB {
 		this._min.minComp(other.min);
 		this._max.maxComp(other.max);
+		return this;
+	}
+
+	expandVector (vec: Vector3): AABB {
+		this._min.minComp(vec);
+		this._max.maxComp(vec);
 		return this;
 	}
 

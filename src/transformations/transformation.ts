@@ -27,7 +27,7 @@ export class Transformation {
 			case "pose":
 			case "steer":
 				const tickDuration = endTick - startTick;
-				this.actionData = buildAction(data as Vector3, startTick, tickDuration);
+				this.actionData = Transformation.buildAction(data as Vector3, startTick, tickDuration);
 				break;
 			case "poseSequence":
 			case "steerSequence":
@@ -58,6 +58,8 @@ export class Transformation {
 					tickOffset += base[i];
 				}
 
+				this.actionData = result;
+
 				break;
 		}
 	}
@@ -71,10 +73,11 @@ export class Transformation {
 	}
 
 	currentStep (tick: number, out: Vector3): boolean {
+		let action: ActionData;
 		switch (this.kind) {
 			case "pose":
 			case "steer":
-				const action = this.actionData as ActionData;
+				action = this.actionData as ActionData;
 
 				if (action.duration === 0 && action.startTick === tick) {
 					out.set(
@@ -101,7 +104,7 @@ export class Transformation {
 			case "steerSequence":
 				// for client, unshift all actions that already passed
 				const data = this.actionData as ActionData[];
-				let action = data[this.currentAction];
+				action = data[this.currentAction];
 
 				while (action.startTick + action.duration <= tick) {
 					this.currentAction++;
@@ -131,7 +134,7 @@ export class Transformation {
 				duration: duration,
 				startTick: startTick,
 				step: vec,
-				remaining: vec,
+				remaining: new Vector3(),
 				error_phase: new Vector3()
 			}
 		}

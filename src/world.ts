@@ -7,6 +7,7 @@ import KinematicBody from "./physics/kinematicBody.js"
 import DynamicBody from "./physics/dynamicBody.js"
 import { Controller } from "./controller/controller.js"
 import DirectionsTable from "./controller/directionsTable.js"
+import TransformationSystem from "./transformations/transformationSystem.js"
 
 type Body = StaticBody | KinematicBody | DynamicBody;
 
@@ -15,27 +16,33 @@ export interface WorldOptions {
 	movementDirections: number;
 	gravity: number;
 	defaultSpeed: number;
+	tickrate: number;
 }
 
 export class World {
+	private bodyCounter: number = 0;
 	private _tick: number = 0;
+	private _tickrate: number;
 	private _gravity: number;
 	private defaultSpeed: number;
-	private bodyCounter: number = 0;
-	private statics: Octree;
+	private statics: Map<number, StaticBody> = new Map();
+	private octree: Octree;
 	private kinematics: Map<number, KinematicBody> = new Map();
 	private dynamics: Map<number, DynamicBody> = new Map();
 	private controllers: Map<number, Controller> = new Map();
+	private transformationSystem: TransformationSystem;
 
 	constructor (options: WorldOptions) {
 		const halfSize = divTrunc(options.worldCubeSize, 2);
-		this.statics = new Octree(new AABB(
+		this.octree = new Octree(new AABB(
 			new Vector3(-halfSize, -halfSize, -halfSize),
 			new Vector3(halfSize, halfSize, halfSize)
 		));
 		DirectionsTable.generateDirectionsTable(options.movementDirections);
 		this._gravity = options.gravity;
 		this.defaultSpeed = options.defaultSpeed;
+		this._tickrate = options.tickrate;
+		this.transformationSystem = new TransformationSystem(this._tick, this._tickrate);
 	}
 
 	get tick (): number {
@@ -44,6 +51,10 @@ export class World {
 
 	set tick (val: number) {
 		this._tick = val;
+	}
+
+	get tickrate (): number {
+		return this._tickrate;
 	}
 
 	get gravity (): number {
@@ -55,6 +66,10 @@ export class World {
 	}
 
 	step () {
+		this._tick++;
+
+		this.transformationSystem.step(this._tick, this.kinematics, this.dynamics);
+
 		for (const [id, k] of this.kinematics.entries()) {
 			k.preStep();
 		}
@@ -78,14 +93,15 @@ export class World {
 	addBody (body: Body) {
 		switch (body.kind) {
 			case "static":
-				// put into octree
+				this.statics.set(body.id, body as StaticBody);
+				body.octreeInsert(this.statics);
 				break;
 			case "kinematic":
 				this.kinematics.set(body.id, body as KinematicBody);
 				break;
 			case "dynamic":
 				this.dynamics.set(body.id, body as DynamicBody);
-				this.controllers.set(body.id, new Controller(body as DynamicBody, this.defaultSpeed))
+				this.controllers.set(body.id, new Controller(body as DynamicBody, this.defaultSpeed));
 				break;
 		}
 	}
