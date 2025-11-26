@@ -94,7 +94,7 @@ export class World {
 		switch (body.kind) {
 			case "static":
 				this.statics.set(body.id, body as StaticBody);
-				body.octreeInsert(this.statics);
+				body.octreeInsert(this.octree);
 				break;
 			case "kinematic":
 				this.kinematics.set(body.id, body as KinematicBody);

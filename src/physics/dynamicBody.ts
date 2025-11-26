@@ -58,8 +58,7 @@ export default class DynamicBody extends KinematicBody {
 		if (this._kinematicBehavior) {
 			super.preStep();
 		} else {
-			this._aabb.translate(this._velocity);
-			this._position.add(this._velocity);
+			this._sweptAABB.copy(this._aabb).expand(this._velocity);
 		}
 	}
 
@@ -67,6 +66,8 @@ export default class DynamicBody extends KinematicBody {
 		if (this._kinematicBehavior) {
 			super.postStep(tick);
 		} else {
+			this._aabb.translate(this._velocity);
+			this._position.add(this._velocity);
 			this._anchorTick = tick;
 			this._anchorPos.copy(this._position);
 		}

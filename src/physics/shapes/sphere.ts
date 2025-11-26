@@ -17,4 +17,11 @@ export default class Sphere implements Shape {
 		max.set(max.x + radius, max.y + radius, max.z + radius);
 		this.aabb = new AABB(min, max);
 	}
+
+	translated (vec: Vector3): Shape {
+		return new Sphere(
+			this.offset.add(vec),
+			this.radius
+		);
+	}
 }

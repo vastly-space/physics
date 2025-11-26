@@ -34,15 +34,13 @@ export default class KinematicBody extends StaticBody {
 	preStep () {
 		if (!this._scriptMove) {
 			this._motionDelta.set(0, 0, 0);
+			this._sweptAABB.copy(this._aabb);
 			return;
 		}
 
 		this._motionDelta.copy(this._scriptPos).sub(this._prevPos);
 
 		this._sweptAABB.copy(this._aabb).expand(this._motionDelta);
-
-		this._aabb.translate(this._motionDelta);
-		this._position.add(this._motionDelta);
 	}
 
 	postStep (tick: number) {
@@ -51,5 +49,7 @@ export default class KinematicBody extends StaticBody {
 		this._prevPos.copy(this._position);
 		this._scriptMove = false;
 		this._sweptAABB.copy(this._aabb);
+		this._aabb.translate(this._motionDelta);
+		this._position.add(this._motionDelta);
 	}
 }

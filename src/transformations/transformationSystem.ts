@@ -7,22 +7,33 @@ import DynamicBody from "../physics/dynamicBody.js"
 export default class TransformationSystem {
 	private _tick: number;
 	private tickrate: number;
-	private transformations: Map<number, Transformation[]> = new Map();
+	private transformations: Map<number, { counter: number; transformations: Map<number, Transformation> }> = new Map();
 
 	constructor (currentTick: number, tickrate: number) {
 		this._tick = currentTick;
 		this.tickrate = tickrate;
 	}
 
-	addTransformation (bodyId: number, kind: TransformationKind, data: Vector3 | Vector3[], duration: number) {
+	addTransformation (bodyId: number, kind: TransformationKind, data: Vector3 | Vector3[], duration: number): number {
 		if (!this.transformations.has(bodyId)) {
-			this.transformations.set(bodyId, []);
+			this.transformations.set(bodyId, { counter: 0, transformations: new Map() });
 		}
 
 		const tr = this.transformations.get(bodyId);
 		const startTick = this._tick + 1;
 		const endTick = startTick + Math.max(1, Math.round(duration/1000 * this.tickrate));
+		const transformationId = tr!.counter++;
+		tr!.transformations.set(transformationId, new Transformation(kind, data, this._tick, startTick, endTick));
 
+		return transformationId;
+	}
+
+	removeTransformation (bodyId: number, transformationId: number) {
+		const tr = this.transformations.get(bodyId);
+
+		if (tr !== undefined) {
+			tr.transformations.delete(transformationId);
+		}
 	}
 
 	clearTransformationsForBody (bodyId: number) {
@@ -33,28 +44,31 @@ export default class TransformationSystem {
 		const toDelete: Set<number> = new Set();
 
 		const posVec = new Vector3();
-		const ended: Set<Transformation> = new Set();
+		const ended: Set<number> = new Set();
 
-		for (const [id, tArr] of this.transformations) {
+		for (const [bodyId, container] of this.transformations) {
 			posVec.set(0, 0, 0);
 			ended.clear();
 
-			let body: KinematicBody | DynamicBody | undefined = kinematics.get(id);
-			if (!body) body = dynamics.get(id);
+			let body: KinematicBody | DynamicBody | undefined = kinematics.get(bodyId);
+			if (!body) body = dynamics.get(bodyId);
 
 			let skip = body === undefined || (body instanceof DynamicBody && !(body as DynamicBody).kinematicBehavior);
 
 			if (!skip) {
-				for (const t of tArr) {
+				for (const [tId, t] of container.transformations) {
 					const isOver = t.currentStep(currentTick, posVec);
 					if (isOver) {
-						ended.add(t);
+						ended.add(tId);
 					}
 				}
 
+				for (const endedId of ended) {
+					container.transformations.delete(endedId);
+				}
 				body!.scriptPos.copy(posVec);
 			} else {
-				toDelete.add(id);
+				toDelete.add(bodyId);
 			}
 		}
 

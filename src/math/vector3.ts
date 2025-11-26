@@ -5,6 +5,10 @@ export default class Vector3 {
 	private _y: number;
 	private _z: number;
 
+	public static readonly XAxis = new Vector3(1, 0, 0);
+	public static readonly YAxis = new Vector3(0, 1, 0);
+	public static readonly ZAxis = new Vector3(0, 0, 1);
+
 	constructor (x: number = 0, y: number = 0, z: number = 0) {
 		this._x = x;
 		this._y = y;

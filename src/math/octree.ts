@@ -72,7 +72,6 @@ export class OctNode {
 		const my = min.y + ((max.y - min.y) >> 1);
 		const mz = min.z + ((max.z - min.z) >> 1);
 
-		// сначала выбираем по центру ребёнка
 		const cx = ((box.min.x + box.max.x) >> 1);
 		const cy = ((box.min.y + box.max.y) >> 1);
 		const cz = ((box.min.z + box.max.z) >> 1);
