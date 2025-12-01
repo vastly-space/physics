@@ -56,4 +56,8 @@ export default class Trimesh implements Shape {
 			));
 		}
 	}
+
+	translated (delta: Vector3): Shape {
+		throw new Error("Trimesh must be static");
+	}
 }

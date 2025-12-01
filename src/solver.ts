@@ -82,7 +82,7 @@ function sortByDistance (sourceBody: DynamicBody, candidates: Collision[]): Coll
 	const sourceBodyPosition = sourceBody.position;
 
 	for (const intersection of candidates) {
-		const center = intersection.aabb.min.add(intersection.aabb.max);
+		const center = intersection.aabb.min.clone().add(intersection.aabb.max);
 
 		center.x = divTrunc(center.x, 2);
 		center.y = divTrunc(center.y, 2);

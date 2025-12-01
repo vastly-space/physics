@@ -84,30 +84,9 @@ export default class AABB {
 
 	overlaps (other: AABB): boolean {
 		return !(
-			this._max.x <= other._min.x || this._min.x >= other._max.x ||
-			this._max.y <= other._min.y || this._min.y >= other._max.y ||
-			this._max.z <= other._min.z || this._min.z >= other._max.z
-		);
-	}
-
-	overlapsXZ (other: AABB): boolean {
-		return !(
-			this._max.x <= other._min.x || this._min.x >= other._max.x ||
-			this._max.z <= other._min.z || this._min.z >= other._max.z
-		);
-	}
-
-	overlapsYZ (other: AABB): boolean {
-		return !(
-			this._max.y <= other._min.y || this._min.y >= other._max.y ||
-			this._max.z <= other._min.z || this._min.z >= other._max.z
-		);
-	}
-
-	overlapsXY (other: AABB): boolean {
-		return !(
-			this._max.x <= other._min.x || this._min.x >= other._max.x ||
-			this._max.y <= other._min.y || this._min.y >= other._max.y
+			this._max.x <= other.min.x || this._min.x >= other.max.x ||
+			this._max.y <= other.min.y || this._min.y >= other.max.y ||
+			this._max.z <= other.min.z || this._min.z >= other.max.z
 		);
 	}
 

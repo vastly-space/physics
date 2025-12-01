@@ -19,12 +19,24 @@ export default class Vector3 {
 		return this._x;
 	}
 
+	set x (x: number) {
+		this._x = x;
+	}
+
 	get y (): number {
 		return this._y;
 	}
 
+	set y (y: number) {
+		this._y = y;
+	}
+
 	get z (): number {
 		return this._z;
+	}
+
+	set z (z: number) {
+		this._z = z;
 	}
 
 	add (v: Vector3): Vector3 {
@@ -125,5 +137,9 @@ export default class Vector3 {
 		this._z += divTrunc(v.z * k, 1);
 
 		return this;
+	}
+
+	isZero (): boolean {
+		return this._x === 0 && this._y === 0 && this.z === 0;
 	}
 }
