@@ -87,6 +87,14 @@ export default class Vector3 {
 		return this._x * v.x + this._y * v.y + this._z * v.z;
 	}
 
+	cross (v: Vector3): Vector3 {
+		this._x = this.y * v.z - this.z * v.y;
+		this._y = this.z * v.x - this.x * v.z;
+		this._z = this.y * v.x - this.x * v.y;
+
+		return this;
+	}
+
 	minComp (v: Vector3): Vector3 {
 		this._x = Math.min(this._x, v.x);
 		this._y = Math.min(this._y, v.y);
@@ -141,5 +149,15 @@ export default class Vector3 {
 
 	isZero (): boolean {
 		return this._x === 0 && this._y === 0 && this.z === 0;
+	}
+
+	normalize (): Vector3 {
+		const len = Math.sqrt(this._x*this._x + this._y*this._y + this._z*this.z);
+		
+		this._x /= len;
+		this._y /= len;
+		this._z /= len;
+
+		return this;
 	}
 }

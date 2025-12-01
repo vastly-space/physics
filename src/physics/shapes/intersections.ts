@@ -99,7 +99,88 @@ export default class Intersections {
 	}
 
 	static static_box_triangle (b: Box, t: Triangle): Intersection | null {
-		return null;
+		const center = new Vector3(
+			(b.aabb.min.x + b.aabb.max.x) / 2,
+			(b.aabb.min.y + b.aabb.max.y) / 2,
+			(b.aabb.min.z + b.aabb.max.z) / 2
+		);
+
+		const tv0 = t.a.clone().sub(center);
+		const tv1 = t.b.clone().sub(center);
+		const tv2 = t.c.clone().sub(center);
+
+		const e0 = tv1.clone().sub(tv0).normalize();
+		const e1 = tv2.clone().sub(tv1).normalize();
+		const e2 = tv0.clone().sub(tv2).normalize();
+
+		function testAxis (axis: Vector3): [boolean, number] {
+			const p0 = tv0.dot(axis);
+	        const p1 = tv1.dot(axis);
+	        const p2 = tv2.dot(axis);
+
+	        const triMin = Math.min(p0, p1, p2);
+	        const triMax = Math.max(p0, p1, p2);
+
+	        // project aabb on axis
+	        const r = Math.abs(axis.x)*b.halfExtents.x + Math.abs(axis.y)*b.halfExtents.y + Math.abs(axis.z)*b.halfExtents.z;
+
+	        const overlap = !(triMax < -r || r < triMin);
+
+	        if (!overlap) return [false, -1];
+
+	        if (triMin < r && -r < triMin) {
+	        	return [true, triMin - r];
+	        } else {
+	        	return [true, triMax + r];
+	        }
+		}
+
+		const n = e0.clone().cross(e1).normalize();
+		const testAxes = [
+			Vector3.XAxis,
+			Vector3.YAxis,
+			Vector3.ZAxis,
+			n,
+			e0.clone().cross(Vector3.XAxis).normalize(),
+			e0.clone().cross(Vector3.YAxis).normalize(),
+			e0.clone().cross(Vector3.ZAxis).normalize(),
+			e1.clone().cross(Vector3.XAxis).normalize(),
+			e1.clone().cross(Vector3.YAxis).normalize(),
+			e1.clone().cross(Vector3.ZAxis).normalize(),
+			e2.clone().cross(Vector3.XAxis).normalize(),
+			e2.clone().cross(Vector3.YAxis).normalize(),
+			e2.clone().cross(Vector3.ZAxis).normalize()
+		];
+		let minOverlapAxis = -1;
+		let overlap: number = -1;
+
+		for (let i=0; i<testAxes.length; i++) {
+			const axis = testAxes[i];
+			if (axis.isZero()) continue;
+			const testResult = testAxis(axis);
+
+			if (!testResult[0]) return null;
+
+			if (minOverlapAxis === -1 || (Math.abs(overlap) > Math.abs(testResult[1]))) {
+				minOverlapAxis = i;
+				overlap = testResult[1];
+			}
+		}
+
+		// mtv is collinear to minOverlapAxis, normalize and scale it
+		const mtv = testAxes[minOverlapAxis].clone();
+		const len = Math.sqrt(mtv.x*mtv.x + mtv.y*mtv.y + mtv.z*mtv.z);
+		mtv.x /= len;
+		mtv.y /= len;
+		mtv.z /= len;
+
+		mtv.scale(overlap);
+
+		return {
+			mtv: mtv,
+			tEnter: 0,
+			tExit: Infinity
+		}
 	}
 
 	static static_sphere_sphere (a: Sphere, b: Sphere): Intersection | null {
@@ -142,7 +223,116 @@ export default class Intersections {
 	}
 
 	static static_sphere_triangle (s: Sphere, t: Triangle): Intersection | null {
-		return null;
+		// project sphere center on triangle's plane
+		const p = s.offset.clone().sub(t.a);
+		const normal = (new Vector3(t.plane[0], t.plane[1], t.plane[2])).normalize();
+		const n = normal.clone();
+		const dist = p.dot(n);
+		n.x *= dist;
+		n.y *= dist;
+		n.z *= dist;
+		p.sub(n);
+
+		// check if this point lies inside triangle
+		const e0 = t.b.clone().sub(t.a).normalize();
+		const e1 = t.c.clone().sub(t.b).normalize();
+		const e2 = t.a.clone().sub(t.c).normalize();
+
+		const cross0 = p.clone().cross(e0);
+		const cross1 = p.clone().cross(e1);
+		const cross2 = p.clone().cross(e2);
+
+		const s0 = Math.sign(cross0.dot(normal));
+		const s1 = Math.sign(cross1.dot(normal));
+		const s2 = Math.sign(cross2.dot(normal));
+
+		if (s0 === s1 && s0 === s2) {
+			// point is inside triangle
+			const dir = s.offset.clone().sub(p);
+			const distSquared = dir.x*dir.x + dir.y*dir.y + dir.z*dir.z;
+
+			if (distSquared > s.radius*s.radius) return null;
+
+			dir.normalize();
+			dir.scale(Math.sqrt(dist));
+
+			return {
+				mtv: dir,
+				tEnter: 0,
+				tExit: Infinity
+			}
+		}
+
+		// point is outside triangle. Check edges
+		let closestPointDir: Vector3 | null = null;
+		let closestDist: number = -1;
+
+		// e0
+		let pd = s.offset.dot(e0);
+		let low = t.a.dot(e0);
+		let high = t.b.dot(e0);
+
+		if (low > high) [low, high] = [high, low];
+
+		if (pd >= low && pd <= high) {
+			let proj = e0.clone().scale(pd);
+			let dir = s.offset.clone().sub(proj);
+			const dist = dir.x*dir.x + dir.y*dir.y + dir.z*dir.z;
+			if (dist < sphere.radius * sphere.radius) {
+				if (closestPointDir === null || closestDist > dist) {
+					closestPointDir = dir;
+					closestDist = dist;
+				}
+			}
+		}
+
+		// e1
+		pd = s.offset.dot(e1);
+		low = t.b.dot(e1);
+		high = t.c.dot(e1);
+
+		if (low > high) [low, high] = [high, low];
+
+		if (pd >= low && pd <= high) {
+			let proj = e0.clone().scale(pd);
+			let dir = s.offset.clone().sub(proj);
+			const dist = dir.x*dir.x + dir.y*dir.y + dir.z*dir.z;
+			if (dist < sphere.radius * sphere.radius) {
+				if (closestPointDir === null || closestDist > dist) {
+					closestPointDir = dir;
+					closestDist = dist;
+				}
+			}
+		}
+
+		// e2
+		pd = s.offset.dot(e2);
+		low = t.a.dot(e2);
+		high = t.c.dot(e2);
+
+		if (low > high) [low, high] = [high, low];
+
+		if (pd >= low && pd <= high) {
+			let proj = e0.clone().scale(pd);
+			let dir = s.offset.clone().sub(proj);
+			const dist = dir.x*dir.x + dir.y*dir.y + dir.z*dir.z;
+			if (dist < sphere.radius * sphere.radius) {
+				if (closestPointDir === null || closestDist > dist) {
+					closestPointDir = dir;
+					closestDist = dist;
+				}
+			}
+		}
+
+		if (closestPointDir !== null) {
+			return {
+				mtv: closestPointDir.normalize().scale(closestDist),
+				tEnter: 0,
+				tExit: Infinity
+			}
+		} else {
+			return null;
+		}
 	}
 
 	static static_cylinder_cylinder (a: Cylinder, b: Cylinder): Intersection | null {
@@ -238,7 +428,8 @@ export default class Intersections {
 	}
 
 	static box_sphere (b: Box, s: Sphere, bvel: Vector3, svel: Vector3): Intersection | null {
-		const rvel = bvel.clone().sub(svel);
+		// sphere is moving, box is not;
+		const rvel = svel.clone().sub(bvel);
 
 		if (rvel.isZero()) {
 			return Intersections.static_box_sphere(b, s);
@@ -335,8 +526,109 @@ export default class Intersections {
 		return null;
 	}
 
-	static box_triangle (b: Box, t: Triangle): Intersection | null {
-		return null;
+	static box_triangle (b: Box, t: Triangle, vel: Vector3): Intersection | null {
+		if (vel.isZero()) return Intersections.static_box_triangle(b, t);
+
+		const center = new Vector3(
+			(b.aabb.min.x + b.aabb.max.x)/2,
+			(b.aabb.min.y + b.aabb.max.y)/2,
+			(b.aabb.min.z + b.aabb.max.z)/2
+		);
+
+		const e0 = t.b.clone().sub(t.a);
+		const e1 = t.c.clone().sub(t.b);
+		const e2 = t.a.clone().sub(t.c);
+
+		const testAxes = [
+			Vector3.XAxis,
+			Vector3.YAxis,
+			Vector3.ZAxis,
+			e0.clone().cross(e1).normalize(),
+			e0.clone().cross(Vector3.XAxis).normalize(),
+			e0.clone().cross(Vector3.YAxis).normalize(),
+			e0.clone().cross(Vector3.ZAxis).normalize(),
+			e1.clone().cross(Vector3.XAxis).normalize(),
+			e1.clone().cross(Vector3.YAxis).normalize(),
+			e1.clone().cross(Vector3.ZAxis).normalize(),
+			e2.clone().cross(Vector3.XAxis).normalize(),
+			e2.clone().cross(Vector3.YAxis).normalize(),
+			e2.clone().cross(Vector3.ZAxis).normalize()
+		];
+
+		let tEnter = -Infinity;
+		let tExit = Infinity;
+		let bestAxisIndex = -1;
+
+		for (let i=0; i<testAxes.length; i++) {
+			const axis = testAxes[i];
+
+			if (axis.isZero()) continue;
+
+			const p0 = t.a.dot(axis);
+			const p1 = t.b.dot(axis);
+			const p2 = t.c.dot(axis);
+			const triMin = Math.min(p0, p1, p2);
+			const triMax = Math.max(p0, p1, p2);
+
+			const vproj = vel.dot(axis);
+			const cproj = center.dot(axis);
+
+			const r = Math.abs(axis.x) * b.halfExtents.x +
+				Math.abs(axis.y) * b.halfExtents.y +
+				Math.abs(axis.z) * b.halfExtents.z;
+
+			const minA = triMin - r;
+			const maxA = triMax + r;
+
+			if (vproj === 0) {
+				if (cproj < minA || cproj > maxA) return null;
+
+				continue;
+			}
+
+			let t1 = (minA - cproj)/vproj;
+			let t2 = (maxA - cproj)/vproj;
+
+			if (t1 > t2) [t1, t2] = [t2, t1];
+
+			if (t1 > tEnter) {
+				tEnter = t1;
+				bestAxisIndex = i;
+			}
+
+			if (t2 < tExit) {
+				tExit = t2;
+			}
+		}
+
+		if (tEnter > tExit || tEnter < 0 || tExit > 1) return null;
+
+		if (bestAxisIndex === -1) {
+			return {
+				mtv: Vector3.YAxis.clone(),
+				tEnter: tEnter,
+				tExit: tExit
+			}
+		}
+
+		const mtv = testAxes[bestAxisIndex].clone();
+		const len = Math.sqrt(mtv.x*mtv.x + mtv.y*mtv.y + mtv.z*mtv.z);
+		mtv.normalize();
+
+		const vdot = vel.dot(mtv);
+		if (vdot > 0) {
+			mtv.neg();
+		}
+
+		mtv.x = mtv.x | 0;
+		mtv.y = mtv.y | 0;
+		mtv.z = mtv.z | 0;
+
+		return {
+			mtv: mtv,
+			tEnter: tEnter,
+			tExit: tExit
+		}
 	}
 
 	static sphere_sphere (a: Sphere, b: Sphere, avel: Vector3, bvel: Vector3): Intersection | null {
