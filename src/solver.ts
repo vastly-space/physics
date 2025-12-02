@@ -1,39 +1,45 @@
 import Vector3 from "./math/vector3.js"
 import AABB from "./math/aabb.js"
 import { Octree } from "./math/octree.js"
+import type { OctItem } from "./math/octree.js"
 import StaticBody from "./physics/staticBody.js"
 import KinematicBody from "./physics/kinematicBody.js"
 import DynamicBody from "./physics/dynamicBody.js"
 import type Shape from "./physics/shape.js"
-import Intersections from "./physics/shapes/intersections.js"
+import { SAT } from "./physics/sat.js"
+import type { Collision } from "./physics/sat.js"
 import { divTrunc } from "./math/utils.js"
+import { VecPool, AABBPool } from "./utils/pool.js"
+import Trimesh from "./physics/shapes/trimesh.js"
 
-interface StaticsCollision {
-	body: StaticBody;
-	shape: Shape;
+interface CollisionCandidate {
+	body: StaticBody | KinematicBody | DynamicBody;
+	shape?: Shape;
 	triangleIndex?: number;
-	aabb: AABB;
 }
 
-interface DynamicsCollision {
-	body: KinematicBody | DynamicBody;
-	aabb: AABB;
+type CollisionEventType = 0 | 1 | 2;
+
+const CollisionEventTypeMap = {
+	"triggerEnter": 0,
+	"triggerExit": 1,
+	"collide": 2
 }
 
-type Collision = StaticsCollision | DynamicsCollision;
-
-export interface CollisionEvent {
-	body1: StaticBody;
-	body2: StaticBody;
-	collisionVolume: AABB;
+interface CollisionEvent {
+	type: CollisionEventType;
+	body1: DynamicBody;
+	body2: StaticBody | KinematicBody | DynamicBody;
+	normal: Vector3;
 }
 
-function broadphase (dynamicId: number, staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>) {
-	const result: Collision[] = [];
+function broadphase (dynamicId: number, staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): CollisionCandidate[] {
+	const result: CollisionCandidate[] = [];
 
 	const body = dynamics.get(dynamicId) as DynamicBody;
 
-	const candidates = staticOctree.queryAABB(body.sweptAABB, body.mask);
+	const candidates: OctItem[] = [];
+	staticOctree.queryAABB(body.sweptAABB, candidates, body.mask);
 
 	for (let i=0; i<candidates.length; i++) {
 		const id = candidates[i].id;
@@ -43,20 +49,18 @@ function broadphase (dynamicId: number, staticOctree: Octree, statics: Map<numbe
 		result.push({
 			body: sBody,
 			shape: shape,
-			triangleIndex: candidates[i].triangleIndex,
-			aabb: fuck
+			triangleIndex: candidates[i].triangleIndex
 		});
 	}
 
 	for (const [id, candidate] of kinematics.entries()) {
 		if (body.mask !== 0 && candidate.layer !== 0 && ((body.mask & candidate.layer) === 0)) continue;
 
-		const intersectionAABB = Intersections.broad_box_box(body.sweptAABB, candidate.sweptAABB);
+		const intersects = SAT.testAABB(body.sweptAABB, candidate.sweptAABB);
 
-		if (intersectionAABB !== null) {
+		if (intersects) {
 			result.push({
-				body: candidate,
-				aabb: intersectionAABB
+				body: candidate
 			})
 		}
 	}
@@ -64,12 +68,11 @@ function broadphase (dynamicId: number, staticOctree: Octree, statics: Map<numbe
 	for (const [id, candidate] of dynamics.entries()) {
 		if (id === dynamicId || (body.mask !== 0 && candidate.layer !== 0 && ((body.mask & candidate.layer) === 0))) continue;
 
-		const intersectionAABB = Intersections.broad_box_box(body.sweptAABB, candidate.sweptAABB);
+		const intersects = SAT.testAABB(body.sweptAABB, candidate.sweptAABB);
 
-		if (intersectionAABB !== null) {
+		if (intersects) {
 			result.push({
-				body: candidate,
-				aabb: intersectionAABB
+				body: candidate
 			})
 		}
 	}
@@ -77,62 +80,120 @@ function broadphase (dynamicId: number, staticOctree: Octree, statics: Map<numbe
 	return result;
 }
 
-function sortByDistance (sourceBody: DynamicBody, candidates: Collision[]): Collision[] {
-	const sorted: { dist: number; candidate: Collision }[] = [];
-	const sourceBodyPosition = sourceBody.position;
-
-	for (const intersection of candidates) {
-		const center = intersection.aabb.min.clone().add(intersection.aabb.max);
-
-		center.x = divTrunc(center.x, 2);
-		center.y = divTrunc(center.y, 2);
-		center.z = divTrunc(center.z, 2);
-
-		const dist = (center.x - sourceBodyPosition.x) * (center.x - sourceBodyPosition.x) + 
-			(center.y - sourceBodyPosition.y) * (center.y - sourceBodyPosition.y) + 
-			(center.z - sourceBodyPosition.z) * (center.z - sourceBodyPosition.z);
-
-		const index = 0;
-
-		while (index < sorted.length && sorted[index].dist < dist) index++;
-
-		if (index === sorted.length) {
-			sorted.push({ dist: dist, candidate: intersection });
-		} else {
-			sorted.splice(index + 1, 0, { dist: dist, candidate: intersection });
-		}
-	}
-
-	return sorted.map(s => s.candidate);
-}
-
-function narrowPhase (sourceBody: DynamicBody, candidates: Collision[]): CollisionEvent[] {
+function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[]): CollisionEvent[] {
 	const result: CollisionEvent[] = [];
+	const sourcePosition = VecPool.alloc().copy(sourceBody.position);
+	const sourceVelocity = VecPool.alloc().copy(sourceBody.velocity);
+	let realCollisions: { candidate: CollisionCandidate, collision: Collision }[] = [];
 
-	for (const candidate of candidates) {
-		if (candidate.body.kind === "static") {
-			if ((candidate as StaticsCollision).triangleIndex !== undefined) {
-				// check triangle collision
-			} else {
-				// get the biggest penetration along movement
+	while (sourceVelocity.lengthSquared() >= 1) {
+		for (const candidate of candidates) {
+			for (const shape of sourceBody.shapes) {
+				if (candidate.triangleIndex) {
+					// test agains triangle
+					const collision = SAT.test(
+						{ parentOffset: sourcePosition, shape: shape },
+						{ parentOffset: candidate.body.position, shape: (candidate.shape as Trimesh).triangles[candidate.triangleIndex] },
+						sourceVelocity,
+						Vector3.Zero
+					);
+
+					if (collision !== null) realCollisions.push({
+						candidate,
+						collision
+					});
+				} else {
+					for (const cShape of candidate.body.shapes) {
+						const collision = SAT.test(
+							{ parentOffset: sourcePosition, shape: shape },
+							{ parentOffset: candidate.body.position, shape: cShape },
+							sourceVelocity,
+							candidate.body.kind === "kinematic" ? (candidate.body as KinematicBody).motionDelta : (candidate.body as DynamicBody).velocity
+						);
+
+						if (collision !== null) realCollisions.push({
+							candidate,
+							collision
+						});
+					}
+				}
 			}
+		}
+
+		if (realCollisions.length === 0) {
+			sourcePosition.add(sourceVelocity);
+			break;
 		} else {
-			// get the biggest penetration along movement
+			let toRemove: CollisionCandidate[] = [];
+			// sort out by time
+			realCollisions.sort((a, b) => a.collision.tEnter - b.collision.tEnter);
+			// skip all trigger bodies events
+			while (realCollisions[0] !== undefined && realCollisions[0].candidate.body.isTrigger) {
+				const c = realCollisions.shift() as { candidate: CollisionCandidate, collision: Collision };
+
+				if (c.collision.tEnter >= 0) {
+					result.push({
+						type: 0,
+						body1: sourceBody,
+						body2: c.candidate.body,
+						normal: c.collision.normal
+					});
+				}
+
+				if (c.collision.tExit <= 1) {
+					result.push({
+						type: 1,
+						body1: sourceBody,
+						body2: c.candidate.body,
+						normal: c.collision.normal
+					});
+				}
+			}
+
+			if (realCollisions.length === 0) {
+				sourcePosition.add(sourceVelocity);
+				break;
+			} else {
+				// move to tEnter
+				sourcePosition.addScaled(sourceVelocity, realCollisions[0].collision.tEnter);
+				// clip speed by normal
+				const vn = sourceVelocity.dot(realCollisions[0].collision.normal);
+				if (vn < 0) {
+					sourceVelocity.addScaled(realCollisions[0].collision.normal, -vn);
+				}
+
+				toRemove.push(realCollisions[0].candidate)
+			}
+
+			candidates = candidates.filter(c => toRemove.includes(c));
 		}
 	}
+
+	sourceBody.position = sourcePosition;
+
+	return result;
 }
 
-export function solve (staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): CollisionEvent[] {
-	AABBPool.reset();
+function solve (staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): CollisionEvent[] {
 	VecPool.reset();
+	AABBPool.reset();
 
-	const result: CollisionEvent[] = [];
+	let result: CollisionEvent[] = [];
 
 	for (const [id, body] of dynamics) {
-		let candidates = broadphase(staticOctree, statics, kinematics, dynamics);
-		candidates = sortByDistance(body, candidates);
+		let candidates = broadphase(id, staticOctree, statics, kinematics, dynamics);
 		result = result.concat(narrowPhase(body, candidates));
 	}
 
 	return result;
+}
+
+export {
+	solve,
+	CollisionEventTypeMap
+}
+
+export type {
+	CollisionEventType,
+	CollisionEvent
 }

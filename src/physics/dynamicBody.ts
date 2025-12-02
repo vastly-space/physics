@@ -2,6 +2,8 @@ import Vector3 from "../math/vector3.js"
 import AABB from "../math/aabb.js"
 import KinematicBody from "./kinematicBody.js"
 
+import { VecPool } from "../utils/pool.js"
+
 export default class DynamicBody extends KinematicBody {
 	protected readonly _kind: string = "dynamic";
 	protected _scriptMove: boolean = false;
@@ -54,7 +56,7 @@ export default class DynamicBody extends KinematicBody {
 		this._aabb.translate(vec);
 	}
 
-	preStep() {
+	preStep () {
 		if (this._kinematicBehavior) {
 			super.preStep();
 		} else {
@@ -62,14 +64,17 @@ export default class DynamicBody extends KinematicBody {
 		}
 	}
 
-	postStep(tick: number) {
+	postStep (tick: number) {
 		if (this._kinematicBehavior) {
 			super.postStep(tick);
 		} else {
-			this._aabb.translate(this._velocity);
-			this._position.add(this._velocity);
 			this._anchorTick = tick;
 			this._anchorPos.copy(this._position);
 		}
+	}
+
+	set position (val: Vector3) {
+		const diff = VecPool.alloc().copy(val).sub(this._position);
+		this.moveBy(diff);
 	}
 }

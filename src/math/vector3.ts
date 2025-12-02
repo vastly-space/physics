@@ -8,6 +8,7 @@ export default class Vector3 {
 	public static readonly XAxis = new Vector3(1, 0, 0);
 	public static readonly YAxis = new Vector3(0, 1, 0);
 	public static readonly ZAxis = new Vector3(0, 0, 1);
+	public static readonly Zero = new Vector3();
 
 	constructor (x: number = 0, y: number = 0, z: number = 0) {
 		this._x = x;
@@ -149,6 +150,16 @@ export default class Vector3 {
 
 	isZero (): boolean {
 		return this._x === 0 && this._y === 0 && this.z === 0;
+	}
+
+	// float methods, only in local collision check
+
+	length (): number {
+		return Math.sqrt(this.lengthSquared());
+	}
+
+	lengthSquared (): number {
+		return this._x*this._x + this._y*this._y + this._z*this._z;
 	}
 
 	normalize (): Vector3 {

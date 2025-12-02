@@ -2,6 +2,8 @@ import Vector3 from "../../math/vector3.js"
 import AABB from "../../math/aabb.js"
 import type Shape from "../shape.js"
 
+import { VecPool } from "../../utils/pool.js"
+
 export default class Sphere implements Shape {
 	public readonly type: string = "sphere";
 	public readonly offset: Vector3;
@@ -18,10 +20,12 @@ export default class Sphere implements Shape {
 		this.aabb = new AABB(min, max);
 	}
 
-	translated (vec: Vector3): Shape {
-		return new Sphere(
-			this.offset.add(vec),
-			this.radius
-		);
+	projectOnAxis (parentOffset: Vector3, axis: Vector3): [number, number] {
+		const center = (VecPool.alloc().copy(this.offset).add(parentOffset)).dot(axis);
+
+		return [
+			center - this.radius,
+			center + this.radius
+		];
 	}
 }

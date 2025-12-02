@@ -112,12 +112,17 @@ export default class StaticBody {
 					tree.insert(item)
 					break;
 				case "trimesh":
+					if (this.kind !== "static") {
+						console.warn("Trimesh is allowed only in static bodies. Skipping");
+						continue;
+					}
+
 					for (let i=0; i<(shape as Trimesh).triangles.length; i++) {
 						tree.insert({
 							id: this._id,
 							shapeIndex: index,
 							triangleIndex: i,
-							aabb: (shape as Trimesh).triangles[i].getAABB(),
+							aabb: (shape as Trimesh).triangles[i].aabb,
 							layer: this._layer
 						});
 					}

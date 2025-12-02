@@ -1,4 +1,7 @@
-export default class Pool<T = unknown> {
+import Vector3 from "../math/vector3.js"
+import AABB from "../math/aabb.js"
+
+class Pool<T = unknown> {
 	private index: number = 0;
 	private instances: T[] = [];
 	private factoryFn: () => T;
@@ -17,4 +20,18 @@ export default class Pool<T = unknown> {
 	reset () {
 		this.index = 0;
 	}
+}
+
+const VecPool = new Pool<Vector3>(() => {
+	return new Vector3();
+});
+
+const AABBPool = new Pool<AABB>(() => {
+	return new AABB(new Vector3(), new Vector3());
+});
+
+export {
+	Pool,
+	VecPool,
+	AABBPool
 }

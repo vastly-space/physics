@@ -6,5 +6,5 @@ export default interface Shape {
 	type: string;
 	offset: Vector3;
 	aabb: AABB;
-	translated: (vec: Vector3) => Shape;
+	projectOnAxis: (globalOffset: Vector3, axis: Vector3) => [number, number];
 }
