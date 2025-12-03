@@ -6,12 +6,12 @@ import { VecPool } from "../utils/pool.js"
 
 export default class DynamicBody extends KinematicBody {
 	protected readonly _kind: string = "dynamic";
-	protected _scriptMove: boolean = false;
-	protected _scriptPos: Vector3 = new Vector3();
 	protected _supportedBy: number = -1;
-	protected _velocity: Vector3 = new Vector3();
+	protected _controllerVelocity: Vector3 = new Vector3();
+	protected _environmentalVelocity: Vector3 = new Vector3();
 	protected _kinematicBehavior: boolean = false;
 	protected _mask: number = 0;
+	protected _gravityMultiplier: number = 1;
 
 	get supportedBy (): number {
 		return this._supportedBy;
@@ -21,12 +21,24 @@ export default class DynamicBody extends KinematicBody {
 		this._supportedBy = val;
 	}
 
-	get velocity (): Vector3 {
-		return this._velocity;
+	get controllerVelocity (): Vector3 {
+		return this._controllerVelocity;
 	}
 
-	set velocity (val: Vector3) {
-		this.velocity = val;
+	set controllerVelocity (val: Vector3) {
+		this._controllerVelocity.copy(val);
+	}
+
+	get environmentalVelocity (): Vector3 {
+		return this._environmentalVelocity;
+	}
+
+	set environmentalVelocity (val: Vector3) {
+		this._environmentalVelocity.copy(val);
+	}
+
+	get velocity (): Vector3 {
+		return (new Vector3()).copy(this._controllerVelocity).add(this._environmentalVelocity);
 	}
 
 	get kinematicBehavior (): boolean {
@@ -51,6 +63,14 @@ export default class DynamicBody extends KinematicBody {
 		this._mask = val;
 	}
 
+	get gravityMultiplier (): number {
+		return this._gravityMultiplier;
+	}
+
+	set gravityMultiplier (val: number) {
+		this._gravityMultiplier = val;
+	}
+
 	moveBy (vec: Vector3) {
 		this._position.add(vec);
 		this._aabb.translate(vec);
@@ -60,7 +80,7 @@ export default class DynamicBody extends KinematicBody {
 		if (this._kinematicBehavior) {
 			super.preStep();
 		} else {
-			this._sweptAABB.copy(this._aabb).expand(this._velocity);
+			this._sweptAABB.copy(this._aabb).expand(this.velocity);
 		}
 	}
 

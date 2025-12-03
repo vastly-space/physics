@@ -10,7 +10,7 @@ import Box from "./physics/shapes/box.js"
 import Sphere from "./physics/shapes/sphere.js"
 import Trimesh from "./physics/shapes/trimesh.js"
 import { Controller } from "./controller/controller.js"
-import DirectionsTable from "./controller/directionsTable.js"
+import { snapVecToDir, getVelocityFromDir } from "./controller/directionsTable.js"
 
 import type { WorldOptions } from "./world.js"
 import type Shape from "./physics/shape.js"
@@ -38,5 +38,6 @@ export {
 	Sphere,
 	Trimesh,
 	Controller,
-	DirectionsTable
+	snapVecToDir,
+	getVelocityFromDir
 }
