@@ -9,7 +9,7 @@ import type Shape from "./physics/shape.js"
 import { SAT } from "./physics/sat.js"
 import type { Collision } from "./physics/sat.js"
 import { divTrunc } from "./math/utils.js"
-import { VecPool, AABBPool } from "./utils/pool.js"
+import { VecPool } from "./utils/pool.js"
 import Trimesh from "./physics/shapes/trimesh.js"
 
 interface CollisionCandidate {
@@ -176,7 +176,6 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[])
 
 function solve (staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): CollisionEvent[] {
 	VecPool.reset();
-	AABBPool.reset();
 
 	let result: CollisionEvent[] = [];
 

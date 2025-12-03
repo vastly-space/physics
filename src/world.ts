@@ -8,7 +8,7 @@ import DynamicBody from "./physics/dynamicBody.js"
 import { Controller } from "./controller/controller.js"
 import TransformationSystem from "./transformations/transformationSystem.js"
 import { solve } from "./solver.js"
-import ReliableChannel from "./channels/reliableChannel.js"
+import { ReliableChannel } from "./channels/reliableChannel.js"
 import SyncChannel from "./channels/syncChannel.js"
 import { VecPool } from "./utils/pool.js"
 
@@ -171,6 +171,12 @@ export class World {
 			this.dynamics.delete(id);
 			this.controllers.delete(id);
 		}
+		for (const body of this.dynamics.values()) {
+			if (body.supportedBy === id) {
+				body.supportedBy = -1;
+			}
+		}
+		this.transformationSystem.clearTransformationsForBody(id);
 	}
 
 	getController (id: number): Controller | undefined {

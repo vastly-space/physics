@@ -2,7 +2,7 @@ import type { CollisionEvent } from "../solver.js"
 
 export type CollisionListener = (e: CollisionEvent[]) => void;
 
-export default class ReliableChannel {
+export class ReliableChannel {
 	private listeners: CollisionListener[] = [];
 
 	on (listener: CollisionListener) {
