@@ -14,12 +14,14 @@ import { VecPool } from "./utils/pool.js"
 
 type Body = StaticBody | KinematicBody | DynamicBody;
 
+const MaxWorldBox = 2147483647 * 2;
+
 export interface WorldOptions {
-	worldCubeSize: number;
+	worldCubeSize?: number;
 	gravity: number;
 	defaultSpeed: number;
 	tickrate: number;
-	serverMode: boolean;
+	networking: "host" | "client";
 	maxDownSpeed: number;
 }
 
@@ -36,12 +38,14 @@ export class World {
 	private dynamics: Map<number, DynamicBody> = new Map();
 	private controllers: Map<number, Controller> = new Map();
 	private transformationSystem: TransformationSystem;
-	private serverMode: boolean;
+	private networking: string;
 	public reliableChannel: ReliableChannel = new ReliableChannel();
 	public syncChannel: SyncChannel = new SyncChannel();
 
 	constructor (options: WorldOptions) {
-		const halfSize = divTrunc(options.worldCubeSize, 2);
+		if (options.worldCubeSize !== undefined && options.worldCubeSize > MaxWorldBox) throw new Error("World cube size extending the limit");
+
+		const halfSize = divTrunc(options.worldCubeSize || MaxWorldBox, 2);
 		this.octree = new Octree(new AABB(
 			new Vector3(-halfSize, -halfSize, -halfSize),
 			new Vector3(halfSize, halfSize, halfSize)
@@ -51,7 +55,7 @@ export class World {
 		this.defaultSpeed = options.defaultSpeed;
 		this._tickrate = options.tickrate;
 		this.transformationSystem = new TransformationSystem(this._tick, this._tickrate);
-		this.serverMode = options.serverMode;
+		this.networking = options.networking;
 	}
 
 	get tick (): number {
@@ -185,5 +189,9 @@ export class World {
 
 	get nextBodyId (): number {
 		return this.bodyCounter++;
+	}
+
+	raycast (from: Vector3, to:Vector3, distance: number = 0): StaticBody | null {
+
 	}
 }

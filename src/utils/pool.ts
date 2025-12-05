@@ -25,8 +25,12 @@ class Pool<T = unknown> {
 const VecPool = new Pool<Vector3>(() => {
 	return new Vector3();
 });
+const AABBPool = new Pool<AABB>(() => {
+	return new AABB();
+});
 
 export {
 	Pool,
-	VecPool
+	VecPool,
+	AABBPool
 }

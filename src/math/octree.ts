@@ -1,5 +1,6 @@
 import Vector3 from "./vector3.js"
 import AABB from "./aabb.js"
+import { SAT } from "../physics/sat.js"
 
 export interface OctItem {
 	id: number;
@@ -52,7 +53,7 @@ export class OctNode {
 		return true;
 	}
 
-	queryAABB(range: AABB, out: OctItem[], mask: number) {
+	queryAABB(range: AABB, out: OctItem[], mask: number): OctItem[] {
 		if (!this._bounds.overlaps(range)) return out;
 		
 		for (const it of this.items) {
@@ -62,6 +63,23 @@ export class OctNode {
 		
 		const c = this._children;
 		if (c[0]) for (let i=0;i<8;i++) c[i]!.queryAABB(range, out, mask);
+
+		return out;
+	}
+
+	queryRay(from: Vector3, to: Vector3, out: OctItem[], mask: number): OctItem[] {
+		if (SAT.ray_aabb(this._bounds, from, to) !== null) {
+			if (this._children[0] === null) {
+				// leaf
+				for (const item of this._items) {
+					out.push(item);
+				}
+			} else {
+				for (const child of this._children) {
+					child._queryRay(from, to, out, mask);
+				}
+			}
+		}
 
 		return out;
 	}
@@ -142,7 +160,11 @@ export class Octree {
 
 	insert(it: OctItem) { this.root.insert(it, this.MAX_ITEMS, this.MAX_DEPTH); }
 
-	queryAABB(range: AABB, out: OctItem[] = [], mask: number = 0) {
+	queryAABB(range: AABB, out: OctItem[] = [], mask: number = 0): OctItem[] {
 		return this.root.queryAABB(range, out, mask);
+	}
+
+	queryRay(from: Vector3, to: Vector3, out: OctItem[] = [], mask: number = 0): OctItem[] {
+		return this.root.queryRay(from, to, out, mask);
 	}
 }

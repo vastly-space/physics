@@ -7,6 +7,7 @@ import { VecPool } from "../utils/pool.js"
 export default class DynamicBody extends KinematicBody {
 	protected readonly _kind: string = "dynamic";
 	protected _supportedBy: number = -1;
+	protected _groundNormal: Vector3 = new Vector3();
 	protected _controllerVelocity: Vector3 = new Vector3();
 	protected _environmentalVelocity: Vector3 = new Vector3();
 	protected _kinematicBehavior: boolean = false;
@@ -19,6 +20,14 @@ export default class DynamicBody extends KinematicBody {
 
 	set supportedBy (val: number) {
 		this._supportedBy = val;
+	}
+
+	get groundNormal (): Vector3 {
+		return this._groundNormal;
+	}
+
+	set groundNormal (val: Vector3) {
+		this._groundNormal.copy(val);
 	}
 
 	get controllerVelocity (): Vector3 {

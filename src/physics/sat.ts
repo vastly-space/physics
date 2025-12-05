@@ -1,7 +1,7 @@
 import Vector3 from "../math/vector3.js"
 import AABB from "../math/aabb.js"
 import type Shape from "./shape.js"
-import { VecPool } from "../utils/pool.js"
+import { VecPool, AABBPool } from "../utils/pool.js"
 
 import Box from "./shapes/box.js"
 import Sphere from "./shapes/sphere.js"
@@ -17,6 +17,11 @@ export interface Collision {
 export interface ShapeWrapper {
 	parentOffset: Vector3;
 	shape: Shape;
+}
+
+export interface RayTestResult {
+	normal: Vector3;
+	hitPoint: Vector3;
 }
 
 export class SAT {
@@ -349,5 +354,167 @@ export class SAT {
 		if (tEnter < 0 || tEnter > 1) return false;
 
 		return true;
+	}
+
+	// for raycast
+	// all methods return surface normal or null
+
+	static ray_aabb (shape: AABB, from: Vector3, to: Vector3): RayTestResult | null {
+		const dir = VecPool.alloc().copy(to).sub(from);
+
+		let tEnter: number = -Infinity;
+		let tExit: number = Infinity;
+		let enterNormal = VecPool.alloc().set(0,0,0);
+
+		for (let i=0; i<3; i++) {
+			const axis = i === 0 ? "x" : i === 1 ? "y" : "z";
+			const origin = from[axis];
+			const direction = dir[axis];
+			const min = shape.min[axis];
+			const max = shape.max[axis];
+
+			if (direction === 0) {
+				if (origin < min || origin > max) {
+	                return null;
+	            }
+	            continue;
+			}
+
+			const t1 = (min - origin) / direction;
+	        const t2 = (max - origin) / direction;
+
+	        const tMin = Math.min(t1, t2);
+	        const tMax = Math.max(t1, t2);
+
+	        if (tMin > tEnter) {
+	            tEnter = tMin;
+
+	            enterNormal.set(0, 0, 0);
+	            switch (axis) {
+		            case "x":
+		            	enterNormal.x = t1 > t2 ? 1 : -1;
+	            		break;
+	            	case "y":
+	            		enterNormal.y = t1 > t2 ? 1 : -1;
+	            		break;
+	            	case "z":
+	            		enterNormal.z = t1 > t2 ? 1 : -1;
+	            		break;
+	            }
+	        }
+
+	        if (tMax < tExit) {
+	            tExit = tMax;
+	        }
+
+	        if (tEnter > tExit) return null;
+		}
+
+		if (tEnter < 0 || tEnter > 1) return null;
+
+		const hitPoint = VecPool.alloc().copy(dir).scale(tEnter).add(from);
+
+		return {
+			normal: enterNormal,
+			hitPoint: hitPoint
+		}
+	}
+
+	static ray_box (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
+		const aabb = AABBPool.alloc().copy((shape.shape as Box).aabb).translate(shape.parentOffset);
+
+		return SAT.ray_aabb(aabb, from, to);
+	}
+
+	static ray_sphere (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
+		const dir = VecPool.alloc().copy(to).sub(from);
+		const center = VecPool.alloc().copy((shape.shape as Sphere).offset).add(shape.parentOffset);
+
+		const oc = VecPool.alloc().copy(from).sub(center);
+
+		const a = dir.dot(dir);
+		const b = 2 * dir.dot(oc);
+		const c = oc.dot.oc;
+
+		const D = b*b - 4 * a * c;
+		if (D < 0) return null;
+
+		const t1 = (-b - Math.sqrt(D)) / (2 * a);
+		const t2 = (-b + Math.sqrt(D)) / (2 * a);
+
+		let t = Infinity;
+
+		if (t1 >= 0 && t1 <= 1) t = t1;
+		else if (t2 >= 0 && t2 <= 1) t = t2;
+
+		if (t === Infinity) return null;
+
+		const hitPoint = VecPool.alloc().copy(d).scale(t).add(from);
+		const normal = VecPool.alloc().copy(hitPoint).sub(center).normalize();
+		normal.x = normal.x | 0;
+		normal.y = normal.y | 0;
+		normal.z = normal.z | 0;
+
+		return { normal, hitPoint };
+	}
+
+	static ray_cylinder (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
+		const dir = VecPool.alloc().copy(to).sub(from);
+		const center = VecPool.alloc().copy((shape.shape as Cylinder).offset).add(shape.parentOffset);
+		const height = (shape.shape as Cylinder).height;
+		const r = (shape.shape as Sphere).radius;
+
+		let bestT = Infinity;
+		let bestNormal: Vector3 | null = null;
+
+		// side intersections
+
+		const a = dir.x*dir.x + dir.z*dir.z;
+		if (a > 0) {
+			const b = 2 * (dir.x * (from.x - center.x) + dir.z * (from.z - center.z));
+			const c = (from.x - center.x)*(from.x - center.x) + (from.z - center.z)*(from.z - center.z) - r*r;
+			const D = b*b - 4*a*c;
+
+			if (D < 0) return null;
+
+			const t1 = (-b - Math.sqrt(D)) / (2 * a);
+			const t2 = (-b + Math.sqrt(D)) / (2 * a);
+
+			// check both sides intersections
+
+			if (t1 >= 0 && t1 <= 1) {
+				const py = from.y + dir.y * t1;
+
+				if ((py >= center.y - height/2 || py <= center.y + height/2) &&
+					(t1 < bestT))
+				{
+					bestT = t1;
+					const hitX = from.x - center.x + dir.x * t1;
+                    const hitZ = from.z - center.z + dir.z * t1;
+                    bestNormal = VecPool.alloc().set(hitX, 0, hitZ).normalize();
+				}
+			}
+
+			if (t2 >= 0 && t2 <= 1) {
+				const py = from.y + dir.y * t2;
+
+				if ((py >= center.y - height/2 || py <= center.y + height/2) &&
+					(t2 < bestT))
+				{
+					bestT = t2;
+					const hitX = from.x - center.x + dir.x * t2;
+                    const hitZ = from.z - center.z + dir.z * t2;
+                    bestNormal = VecPool.alloc().set(hitX, 0, hitZ).normalize();
+				}
+			}
+		}
+
+		// top cap intersection
+
+		// bottom cap intersection
+	}
+
+	static ray_triangle (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
+
 	}
 }
