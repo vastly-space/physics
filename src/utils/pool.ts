@@ -26,7 +26,7 @@ const VecPool = new Pool<Vector3>(() => {
 	return new Vector3();
 });
 const AABBPool = new Pool<AABB>(() => {
-	return new AABB();
+	return new AABB(new Vector3(), new Vector3());
 });
 
 export {

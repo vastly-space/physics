@@ -20,6 +20,9 @@ export default class DynamicBody extends KinematicBody {
 
 	set supportedBy (val: number) {
 		this._supportedBy = val;
+		if (val === -1) {
+			this._groundNormal.set(0, 0, 0);
+		}
 	}
 
 	get groundNormal (): Vector3 {

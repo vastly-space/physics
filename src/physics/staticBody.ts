@@ -96,6 +96,7 @@ export default class StaticBody {
 				case "box":
 					item = {
 						id: this._id,
+						body: this,
 						shapeIndex: index,
 						aabb: shape.aabb,
 						layer: this._layer
@@ -105,6 +106,7 @@ export default class StaticBody {
 				case "sphere":
 					item = {
 						id: this._id,
+						body: this,
 						shapeIndex: index,
 						aabb: shape.aabb,
 						layer: this._layer
@@ -120,6 +122,7 @@ export default class StaticBody {
 					for (let i=0; i<(shape as Trimesh).triangles.length; i++) {
 						tree.insert({
 							id: this._id,
+							body: this,
 							shapeIndex: index,
 							triangleIndex: i,
 							aabb: (shape as Trimesh).triangles[i].aabb,

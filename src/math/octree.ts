@@ -1,9 +1,11 @@
 import Vector3 from "./vector3.js"
 import AABB from "./aabb.js"
 import { SAT } from "../physics/sat.js"
+import StaticBody from "../physics/staticBody.js"
 
 export interface OctItem {
 	id: number;
+	body: StaticBody;
 	shapeIndex: number;
 	triangleIndex?: number;
 	aabb: AABB;
@@ -57,7 +59,7 @@ export class OctNode {
 		if (!this._bounds.overlaps(range)) return out;
 		
 		for (const it of this.items) {
-			if (mask !== 0 && it.layer !== 0 && ((mask & it.layer) === 0)) continue;
+			if (mask !== 0 && it.body.layer !== 0 && ((mask & it.body.layer) === 0)) continue;
 			if (it.aabb.overlaps(range)) out.push(it);
 		}
 		
@@ -72,11 +74,12 @@ export class OctNode {
 			if (this._children[0] === null) {
 				// leaf
 				for (const item of this._items) {
+					if (mask !== 0 && item.body.layer !== 0 && ((mask & item.body.layer) === 0)) continue;
 					out.push(item);
 				}
 			} else {
 				for (const child of this._children) {
-					child._queryRay(from, to, out, mask);
+					child!.queryRay(from, to, out, mask);
 				}
 			}
 		}

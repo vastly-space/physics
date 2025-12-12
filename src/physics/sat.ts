@@ -20,18 +20,23 @@ export interface ShapeWrapper {
 }
 
 export interface RayTestResult {
+	t: number;
 	normal: Vector3;
 	hitPoint: Vector3;
+	distance: number;
 }
 
 export class SAT {
-	private static swept_interval_test (aMin: number, aMax: number, bMin: number, bMax: number, vel: number): [number, number] | null {
+	static swept_interval_test (aMin: number, aMax: number, bMin: number, bMax: number, vel: number): [number, number, number] | null {
 		if (vel === 0) {
 			if (aMin > bMax || aMax < bMin) {
 				return null;
 			}
 
-			return [0, 1];
+			const p1 = aMax - bMin;
+			const p2 = bMax - aMin;
+
+			return [0, 1, Math.min(p1, p2)];
 		} else {
 			const t1 = (bMin - aMax) / vel;
 			const t2 = (bMax - aMin) / vel;
@@ -39,11 +44,11 @@ export class SAT {
 			const enter = Math.min(t1, t2);
 			const exit = Math.max(t1, t2);
 
-			return [enter, exit];
+			return [enter, exit, 0];
 		}
 	}
 
-	private static box_box_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static box_box_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		return [
 			VecPool.alloc().copy(Vector3.XAxis),
 			VecPool.alloc().copy(Vector3.YAxis),
@@ -51,7 +56,7 @@ export class SAT {
 		]
 	}
 
-	private static box_sphere_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static box_sphere_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		return [
 			VecPool.alloc().copy(Vector3.XAxis),
 			VecPool.alloc().copy(Vector3.YAxis),
@@ -59,7 +64,7 @@ export class SAT {
 		]
 	}
 
-	private static box_cylinder_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static box_cylinder_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		return [
 			VecPool.alloc().copy(Vector3.XAxis),
 			VecPool.alloc().copy(Vector3.YAxis),
@@ -67,7 +72,7 @@ export class SAT {
 		]
 	}
 
-	private static box_triangle_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static box_triangle_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		const result = [
 			VecPool.alloc().copy(Vector3.XAxis),
 			VecPool.alloc().copy(Vector3.YAxis),
@@ -95,7 +100,7 @@ export class SAT {
 		return result;
 	}
 
-	private static sphere_sphere_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static sphere_sphere_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		const s1 = a.shape as Sphere;
 		const s2 = b.shape as Sphere;
 
@@ -103,11 +108,11 @@ export class SAT {
 		const c2 = VecPool.alloc().copy(s2.offset).add(b.parentOffset);
 
 		return [
-			c2.sub(c1)
+			c1.sub(c2)
 		]
 	}
 
-	private static sphere_cylinder_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static sphere_cylinder_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		const result = [
 			VecPool.alloc().copy(Vector3.YAxis)
 		];
@@ -129,7 +134,7 @@ export class SAT {
 		return result;
 	}
 
-	private static sphere_triangle_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static sphere_triangle_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		const result: Vector3[] = [];
 
 		const sphere = a.shape as Sphere;
@@ -155,7 +160,7 @@ export class SAT {
 		return result;
 	}
 
-	private static cylinder_cylinder_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static cylinder_cylinder_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		const result: Vector3[] = [
 			VecPool.alloc().copy(Vector3.YAxis)
 		];
@@ -169,7 +174,7 @@ export class SAT {
 		return result;
 	}
 
-	private static cylinder_triangle_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static cylinder_triangle_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		const result: Vector3[] = [
 			VecPool.alloc().copy(Vector3.YAxis)
 		];
@@ -191,7 +196,7 @@ export class SAT {
 		return result;
 	}
 
-	private static collect_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static collect_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		let result: Vector3[];
 
 		switch (a.shape.type) {
@@ -217,6 +222,7 @@ export class SAT {
 				switch (b.shape.type) {
 					case "box":
 						result = SAT.box_sphere_axes(b, a);
+						result = result.map(v => v.neg());
 						break;
 					case "sphere":
 						result = SAT.sphere_sphere_axes(a, b);
@@ -235,9 +241,11 @@ export class SAT {
 				switch (b.shape.type) {
 					case "box":
 						result = SAT.box_cylinder_axes(b, a);
+						result = result.map(v => v.neg());
 						break;
 					case "sphere":
 						result = SAT.sphere_cylinder_axes(b, a);
+						result = result.map(v => v.neg());
 						break;
 					case "cylinder":
 						result = SAT.cylinder_cylinder_axes(a, b);
@@ -263,13 +271,14 @@ export class SAT {
 	}
 
 	static test (a: ShapeWrapper, b: ShapeWrapper, avel: Vector3, bvel: Vector3): Collision | null {
-		const vel = VecPool.alloc().copy(bvel).sub(avel);
+		const vel = VecPool.alloc().copy(avel).sub(bvel);
 
 		const testAxes = SAT.collect_axes(a, b);
 
 		let tEnter: number = -Infinity;
 		let tExit: number = Infinity;
 		let bestAxisIndex: number = -1;
+		let bestAxisPenetration: number = Infinity;
 
 		for (let i=0; i<testAxes.length; i++) {
 			const axis = testAxes[i];
@@ -281,9 +290,15 @@ export class SAT {
 
 			if (intersection === null) return null;
 
-			if (intersection[0] > tEnter) {
+			if (intersection[0] === tEnter) {
+				if (bestAxisPenetration > intersection[2]) {
+					bestAxisIndex = i;
+					bestAxisPenetration = intersection[2];	
+				}
+			} else if (intersection[0] > tEnter) {
 				tEnter = intersection[0];
 				bestAxisIndex = i;
+				bestAxisPenetration = intersection[2];
 			}
 
 			if (intersection[1] < tExit) {
@@ -413,10 +428,13 @@ export class SAT {
 		if (tEnter < 0 || tEnter > 1) return null;
 
 		const hitPoint = VecPool.alloc().copy(dir).scale(tEnter).add(from);
+		const distance = VecPool.alloc().copy(hitPoint).sub(from).length() | 0;
 
 		return {
+			t: tEnter,
 			normal: enterNormal,
-			hitPoint: hitPoint
+			hitPoint: hitPoint,
+			distance: distance
 		}
 	}
 
@@ -434,7 +452,7 @@ export class SAT {
 
 		const a = dir.dot(dir);
 		const b = 2 * dir.dot(oc);
-		const c = oc.dot.oc;
+		const c = oc.dot(oc);
 
 		const D = b*b - 4 * a * c;
 		if (D < 0) return null;
@@ -449,13 +467,11 @@ export class SAT {
 
 		if (t === Infinity) return null;
 
-		const hitPoint = VecPool.alloc().copy(d).scale(t).add(from);
+		const hitPoint = VecPool.alloc().copy(dir).scale(t).add(from);
 		const normal = VecPool.alloc().copy(hitPoint).sub(center).normalize();
-		normal.x = normal.x | 0;
-		normal.y = normal.y | 0;
-		normal.z = normal.z | 0;
+		const distance = VecPool.alloc().copy(hitPoint).sub(from).length() | 0;
 
-		return { normal, hitPoint };
+		return { t, normal, hitPoint, distance };
 	}
 
 	static ray_cylinder (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
@@ -510,11 +526,89 @@ export class SAT {
 		}
 
 		// top cap intersection
+		if (dir.y !== 0) {
+			const t = (center.y + height/2 - from.y) / dir.y;
+	        if (t < 0 || t > 1) return null;
+
+	        const px = from.x + dir.x * t;
+	        const pz = from.z + dir.z * t;
+
+	        const dxCap = px - center.x;
+	        const dzCap = pz - center.z;
+
+	        if (dxCap*dxCap + dzCap*dzCap <= r*r) {
+	            if (t < bestT) {
+	                bestT = t;
+	                bestNormal = VecPool.alloc().copy(Vector3.YAxis);
+	            }
+	        }
+		}
 
 		// bottom cap intersection
+		if (dir.y !== 0) {
+			const t = (center.y - height/2 - from.y) / dir.y;
+	        if (t < 0 || t > 1) return null;
+
+	        const px = from.x + dir.x * t;
+	        const pz = from.z + dir.z * t;
+
+	        const dxCap = px - center.x;
+	        const dzCap = pz - center.z;
+
+	        if (dxCap*dxCap + dzCap*dzCap <= r*r) {
+	            if (t < bestT) {
+	                bestT = t;
+	                bestNormal = VecPool.alloc().copy(Vector3.YAxis).neg();
+	            }
+	        }
+		}
+
+		if (bestT === Infinity || bestNormal === null) return null;
+
+		const hitPoint = VecPool.alloc().copy(dir).scale(bestT).add(from);
+		const distance = VecPool.alloc().copy(hitPoint).sub(from).length() | 0;
+
+		return {
+			t: bestT,
+			normal: bestNormal,
+			hitPoint: hitPoint,
+			distance: distance
+		}
 	}
 
 	static ray_triangle (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
+		const triangle = shape.shape as Triangle;
+		const dir = VecPool.alloc().copy(to).sub(from);
 
+		const e0 = VecPool.alloc().copy(triangle.b).sub(triangle.a);
+		const e1 = VecPool.alloc().copy(triangle.c).sub(triangle.a);
+
+		const H = VecPool.alloc().copy(dir).cross(e0);
+		const det = e0.dot(H);
+
+		if (det > -1e-8 && det < 1e-8) return null;
+
+		const invDet = 1/det;
+
+		const T = VecPool.alloc().copy(from).sub(triangle.a);
+
+		const u = T.dot(H) * invDet;
+		if (u < 0 || u > 1) return null;
+
+		const q = VecPool.alloc().copy(T).cross(e0);
+
+		const v = dir.dot(q) * invDet;
+
+		if (v < 0 || u + v > 1) return null;
+
+		const t = e1.dot(q) * invDet;
+
+		if (t < 0 || t > 1) return null;
+
+		const hitPoint = VecPool.alloc().copy(dir).scale(t).add(from);
+	    const normal = VecPool.alloc().copy(e0).cross(e1).normalize();
+	    const distance = VecPool.alloc().copy(hitPoint).sub(from).length() | 0;
+
+	    return { t, hitPoint, normal, distance };
 	}
 }

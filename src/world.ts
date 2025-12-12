@@ -8,6 +8,7 @@ import DynamicBody from "./physics/dynamicBody.js"
 import { Controller } from "./controller/controller.js"
 import TransformationSystem from "./transformations/transformationSystem.js"
 import { solve } from "./solver.js"
+import type { CollisionEvent } from "./solver.js"
 import { ReliableChannel } from "./channels/reliableChannel.js"
 import SyncChannel from "./channels/syncChannel.js"
 import { VecPool } from "./utils/pool.js"
@@ -96,12 +97,15 @@ export class World {
 				if (d.supportedBy !== -1) {
 					// we have a platform that carries body
 					if (this.kinematics.has(d.supportedBy)) {
+						/*
+							SLOPE
+						*/
 						envVelocity.add(this.kinematics.get(d.supportedBy)!.motionDelta);
 					} else if (this.dynamics.has(d.supportedBy)) {
 						deps[id] = d.supportedBy;
 					}
 				} else {
-					envVelocity.y = d.environmentalVelocity.y - this._gravity;
+					envVelocity.y = d.environmentalVelocity.y - ((this._gravity/this._tickrate) | 0);
 
 					if (envVelocity.y < this.maxDownSpeed) envVelocity.y = this.maxDownSpeed;
 				}
@@ -134,16 +138,41 @@ export class World {
 					continue;
 				}
 				
+				/*
+					SLOPE
+				*/
+
 				upBody.environmentalVelocity.add(downBody.velocity);
+
 				delete deps[upId];
 			}
 		}
 
+		let tickEvents: CollisionEvent[] = [];
+
 		for (const [id, d] of this.dynamics.entries()) {
 			d.preStep();
-		}
 
-		const tickEvents = solve(this.octree, this.statics, this.kinematics, this.dynamics);
+			const tickResult = solve(d, this.octree, this.statics, this.kinematics, this.dynamics);
+			/*
+				STEP UP STRATEGY
+			*/
+			d.position = tickResult.desiredPosition;
+			d.supportedBy = -1;
+
+			// update grounds
+			for (const event of tickResult.events) {
+				d.supportedBy = -1;
+
+				if (event.normal.y > 0) {
+					if (event.normal.y > d.groundNormal.y)
+					d.supportedBy = event.body2.id;
+					d.groundNormal = event.normal;
+				}
+			}
+
+			tickEvents = tickEvents.concat(tickResult.events);
+		}
 
 		this.reliableChannel.flush(tickEvents);
 
@@ -169,18 +198,26 @@ export class World {
 		}
 	}
 
+	addController (bodyId: number, controller: Controller) {
+		this.controllers.set(bodyId, controller);
+	}
+
 	deleteBody (id: number) {
 		if (this.kinematics.has(id)) this.kinematics.delete(id);
 		if (this.dynamics.has(id)) {
 			this.dynamics.delete(id);
-			this.controllers.delete(id);
 		}
+		this.controllers.delete(id);
 		for (const body of this.dynamics.values()) {
 			if (body.supportedBy === id) {
 				body.supportedBy = -1;
 			}
 		}
 		this.transformationSystem.clearTransformationsForBody(id);
+	}
+
+	deleteController (id: number) {
+		this.controllers.delete(id);
 	}
 
 	getController (id: number): Controller | undefined {
@@ -192,6 +229,6 @@ export class World {
 	}
 
 	raycast (from: Vector3, to:Vector3, distance: number = 0): StaticBody | null {
-
+		return null;
 	}
 }

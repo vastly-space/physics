@@ -80,7 +80,7 @@ function broadphase (dynamicId: number, staticOctree: Octree, statics: Map<numbe
 	return result;
 }
 
-function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[]): CollisionEvent[] {
+function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[]): { desiredPosition: Vector3; events: CollisionEvent[] } {
 	const result: CollisionEvent[] = [];
 	const sourcePosition = VecPool.alloc().copy(sourceBody.position);
 	const sourceVelocity = VecPool.alloc().copy(sourceBody.velocity);
@@ -169,23 +169,18 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[])
 		}
 	}
 
-	sourceBody.position = sourcePosition;
-
-	return result;
+	return {
+		desiredPosition: sourcePosition,
+		events: result
+	}
 }
 
-function solve (staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): CollisionEvent[] {
+function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): { desiredPosition: Vector3; events: CollisionEvent[] } {
 	AABBPool.reset();
 	VecPool.reset();
 
-	let result: CollisionEvent[] = [];
-
-	for (const [id, body] of dynamics) {
-		let candidates = broadphase(id, staticOctree, statics, kinematics, dynamics);
-		result = result.concat(narrowPhase(body, candidates));
-	}
-
-	return result;
+	let candidates = broadphase(sourceBody.id, staticOctree, statics, kinematics, dynamics);
+	return narrowPhase(sourceBody, candidates);
 }
 
 export {
