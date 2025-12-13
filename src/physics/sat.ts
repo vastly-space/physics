@@ -48,36 +48,43 @@ export class SAT {
 		}
 	}
 
-	static box_box_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static basic_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+		const ac = VecPool.alloc().copy(a.parentOffset).add(a.shape.offset);
+		const bc = VecPool.alloc().copy(b.parentOffset).add(b.shape.offset);
+
 		return [
-			VecPool.alloc().copy(Vector3.XAxis),
-			VecPool.alloc().copy(Vector3.YAxis),
-			VecPool.alloc().copy(Vector3.ZAxis),
+			VecPool.alloc().set(
+				ac.x <= bc.x ? -1 : 1,
+				0,
+				0
+			),
+			VecPool.alloc().set(
+				0,
+				ac.y <= bc.y ? -1 : 1,
+				0
+			),
+			VecPool.alloc().set(
+				0,
+				0,
+				ac.z <= bc.z ? -1 : 1
+			),
 		]
+	}
+
+	static box_box_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+		return SAT.basic_axes(a, b);
 	}
 
 	static box_sphere_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
-		return [
-			VecPool.alloc().copy(Vector3.XAxis),
-			VecPool.alloc().copy(Vector3.YAxis),
-			VecPool.alloc().copy(Vector3.ZAxis),
-		]
+		return SAT.basic_axes(a, b);
 	}
 
 	static box_cylinder_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
-		return [
-			VecPool.alloc().copy(Vector3.XAxis),
-			VecPool.alloc().copy(Vector3.YAxis),
-			VecPool.alloc().copy(Vector3.ZAxis),
-		]
+		return SAT.basic_axes(a, b);
 	}
 
 	static box_triangle_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
-		const result = [
-			VecPool.alloc().copy(Vector3.XAxis),
-			VecPool.alloc().copy(Vector3.YAxis),
-			VecPool.alloc().copy(Vector3.ZAxis),
-		]
+		const result = SAT.basic_axes(a, b);
 
 		const box = a.shape as Box;
 		const triangle = b.shape as Triangle;
@@ -86,15 +93,15 @@ export class SAT {
 		const e1 = VecPool.alloc().copy(triangle.c).sub(triangle.b);
 		const e2 = VecPool.alloc().copy(triangle.a).sub(triangle.c);
 
-		result.push(VecPool.alloc().copy(Vector3.XAxis).cross(e0));
-		result.push(VecPool.alloc().copy(Vector3.XAxis).cross(e1));
-		result.push(VecPool.alloc().copy(Vector3.XAxis).cross(e2));
-		result.push(VecPool.alloc().copy(Vector3.YAxis).cross(e0));
-		result.push(VecPool.alloc().copy(Vector3.YAxis).cross(e1));
-		result.push(VecPool.alloc().copy(Vector3.YAxis).cross(e2));
-		result.push(VecPool.alloc().copy(Vector3.ZAxis).cross(e0));
-		result.push(VecPool.alloc().copy(Vector3.ZAxis).cross(e1));
-		result.push(VecPool.alloc().copy(Vector3.ZAxis).cross(e2));
+		result.push(VecPool.alloc().copy(result[0]).cross(e0));
+		result.push(VecPool.alloc().copy(result[0]).cross(e1));
+		result.push(VecPool.alloc().copy(result[0]).cross(e2));
+		result.push(VecPool.alloc().copy(result[1]).cross(e0));
+		result.push(VecPool.alloc().copy(result[1]).cross(e1));
+		result.push(VecPool.alloc().copy(result[1]).cross(e2));
+		result.push(VecPool.alloc().copy(result[2]).cross(e0));
+		result.push(VecPool.alloc().copy(result[2]).cross(e1));
+		result.push(VecPool.alloc().copy(result[2]).cross(e2));
 		result.push(VecPool.alloc().copy(e0).cross(e1));
 
 		return result;
@@ -161,12 +168,17 @@ export class SAT {
 	}
 
 	static cylinder_cylinder_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
-		const result: Vector3[] = [
-			VecPool.alloc().copy(Vector3.YAxis)
-		];
-
 		const ca = VecPool.alloc().copy((a.shape as Cylinder).offset).add(a.parentOffset);
 		const cb = VecPool.alloc().copy((b.shape as Cylinder).offset).add(b.parentOffset);
+
+		const result: Vector3[] = [
+			VecPool.alloc().set(
+				0,
+				ca.y <= cb.y ? -1 : 1,
+				0
+			)
+		];
+
 		ca.y = 0;
 		cb.y = 0;
 		result.push(cb.sub(ca));

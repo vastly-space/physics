@@ -29,13 +29,14 @@ export default class Cylinder implements Shape {
 
 	projectOnAxis (parentOffset: Vector3, axis: Vector3): [number, number] {
 		const center = (VecPool.alloc().copy(this.offset).add(parentOffset)).dot(axis);
-		const cAxis = VecPool.alloc().copy(Vector3.YAxis);
-		const cos = cAxis.dot(axis);
-		const circleProjection = this.radius * Math.sqrt(1 - cos*cos);
+		const axisDot = axis.y;
+		const heightExtent = (this.height * 0.5) * Math.abs(axisDot);
+		const radialExtent = this.radius * Math.sqrt(1 - axisDot * axisDot);
+		const extent = heightExtent + radialExtent;
 
 		return [
-			center - circleProjection,
-			center + circleProjection
+			center - extent,
+			center + extent
 		];
 	}
 }
