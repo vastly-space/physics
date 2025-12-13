@@ -429,4 +429,235 @@ describe("SAT tests", () => {
 		expect(testResult.normal.y).toBeCloseTo(0);
 		expect(testResult.normal.z).toBeCloseTo(0);
 	});
+
+	it("AABB x Triangle static non intersecting", () => {
+		const b = new Box(new Vector3(0,0,0), 2, 2, 2);
+		const t = new Triangle(
+			new Vector3(1,5,0),
+			new Vector3(1,5,1),
+			new Vector3(0,5,1)
+		);
+
+		const testResult = SAT.test(
+			{ shape: b, parentOffset: new Vector3(0,10,0) },
+			{ shape: t, parentOffset: new Vector3(0,0,0) },
+			new Vector3(0,0,0),
+			new Vector3(0,0,0)
+		);
+
+		expect(testResult).toBe(null);
+	});
+
+	it("AABB x Triangle static intersecting", () => {
+		const b = new Box(new Vector3(0,0,0), 4, 4, 4);
+		const t = new Triangle(
+			new Vector3(1,5,0),
+			new Vector3(1,5,1),
+			new Vector3(0,5,1)
+		);
+
+		const testResult = SAT.test(
+			{ shape: b, parentOffset: new Vector3(0,3,0) },
+			{ shape: t, parentOffset: new Vector3(0,0,0) },
+			new Vector3(0,0,0),
+			new Vector3(0,0,0)
+		);
+
+		expect(testResult).not.toBe(null);
+		expect(testResult.normal.x).toBeCloseTo(0);
+		expect(testResult.normal.y).toBeCloseTo(-1);
+		expect(testResult.normal.z).toBeCloseTo(0);
+	});
+
+	it("AABB x Triangle moving non intersecting", () => {
+		const b = new Box(new Vector3(0,0,0), 2, 2, 2);
+		const t = new Triangle(
+			new Vector3(1,5,0),
+			new Vector3(1,5,1),
+			new Vector3(0,5,1)
+		);
+
+		const testResult = SAT.test(
+			{ shape: b, parentOffset: new Vector3(0,10,0) },
+			{ shape: t, parentOffset: new Vector3(0,0,0) },
+			new Vector3(1,0,1),
+			new Vector3(0,0,0)
+		);
+
+		expect(testResult).toBe(null);
+	});
+
+	it("AABB x Triangle moving intersecting", () => {
+		const b = new Box(new Vector3(0,0,0), 2, 2, 2);
+		const t = new Triangle(
+			new Vector3(1,5,0),
+			new Vector3(1,5,1),
+			new Vector3(0,5,1)
+		);
+
+		const testResult = SAT.test(
+			{ shape: b, parentOffset: new Vector3(0,3,0) },
+			{ shape: t, parentOffset: new Vector3(0,0,0) },
+			new Vector3(1,1,1),
+			new Vector3(0,0,0)
+		);
+
+		expect(testResult).not.toBe(null);
+		expect(testResult.normal.x).toBeCloseTo(0);
+		expect(testResult.normal.y).toBeCloseTo(-1);
+		expect(testResult.normal.z).toBeCloseTo(0);
+	});
+
+	it("Sphere x Triangle static non intersecting", () => {
+		const s = new Sphere(new Vector3(0,0,0), 4);
+		const t = new Triangle(
+			new Vector3(1,5,0),
+			new Vector3(1,5,1),
+			new Vector3(0,5,1)
+		);
+
+		const testResult = SAT.test(
+			{ shape: s, parentOffset: new Vector3(0,1,0) },
+			{ shape: t, parentOffset: new Vector3(0,0,0) },
+			new Vector3(0,0,0),
+			new Vector3(0,0,0)
+		);
+
+		expect(testResult).toBe(null);
+	});
+
+	it("Sphere x Triangle static intersecting", () => {
+		const s = new Sphere(new Vector3(0,0,0), 4);
+		const t = new Triangle(
+			new Vector3(1,5,0),
+			new Vector3(1,5,1),
+			new Vector3(0,5,1)
+		);
+
+		const testResult = SAT.test(
+			{ shape: s, parentOffset: new Vector3(0,2,0) },
+			{ shape: t, parentOffset: new Vector3(0,0,0) },
+			new Vector3(0,0,0),
+			new Vector3(0,0,0)
+		);
+
+		expect(testResult).not.toBe(null);
+	});
+
+	it("Sphere x Triangle moving non intersecting", () => {
+		const s = new Sphere(new Vector3(0,0,0), 4);
+		const t = new Triangle(
+			new Vector3(1,5,0),
+			new Vector3(1,5,1),
+			new Vector3(0,5,1)
+		);
+
+		const testResult = SAT.test(
+			{ shape: s, parentOffset: new Vector3(0,1,0) },
+			{ shape: t, parentOffset: new Vector3(0,0,0) },
+			new Vector3(-1,0,0),
+			new Vector3(0,0,0)
+		);
+
+		expect(testResult).toBe(null);
+	});
+
+	it("Sphere x Triangle moving intersecting", () => {
+		const s = new Sphere(new Vector3(0,0,0), 4);
+		const t = new Triangle(
+			new Vector3(1,5,0),
+			new Vector3(1,5,1),
+			new Vector3(0,5,1)
+		);
+
+		const testResult = SAT.test(
+			{ shape: s, parentOffset: new Vector3(0,1,0) },
+			{ shape: t, parentOffset: new Vector3(0,0,0) },
+			new Vector3(1,0,0),
+			new Vector3(0,0,0)
+		);
+
+		expect(testResult).not.toBe(null);
+		expect(testResult.normal.x).toBeLessThan(0);
+		expect(testResult.normal.y).toBeLessThan(0);
+		expect(testResult.normal.z).toBeLessThan(0);
+	});
+
+	it("Cylinder x Triangle static non intersecting", () => {
+		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+		const t = new Triangle(
+			new Vector3(1,5,0),
+			new Vector3(1,5,1),
+			new Vector3(0,5,1)
+		);
+
+		const testResult = SAT.test(
+			{ shape: c, parentOffset: new Vector3(0,0,0) },
+			{ shape: t, parentOffset: new Vector3(0,0,0) },
+			new Vector3(0,0,0),
+			new Vector3(0,0,0)
+		);
+
+		expect(testResult).toBe(null);
+	});
+
+	it("Cylinder x Triangle static intersecting", () => {
+		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+		const t = new Triangle(
+			new Vector3(1,5,0),
+			new Vector3(1,5,1),
+			new Vector3(0,5,1)
+		);
+
+		const testResult = SAT.test(
+			{ shape: c, parentOffset: new Vector3(0,3,0) },
+			{ shape: t, parentOffset: new Vector3(0,0,0) },
+			new Vector3(0,0,0),
+			new Vector3(0,0,0)
+		);
+
+		expect(testResult).not.toBe(null);
+		expect(testResult.normal.x).toBeCloseTo(0);
+		expect(testResult.normal.y).toBeCloseTo(-1);
+		expect(testResult.normal.z).toBeCloseTo(0);
+	});
+
+	it("Cylinder x Triangle moving non intersecting", () => {
+		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+		const t = new Triangle(
+			new Vector3(1,5,0),
+			new Vector3(1,5,1),
+			new Vector3(0,5,1)
+		);
+
+		const testResult = SAT.test(
+			{ shape: c, parentOffset: new Vector3(0,0,0) },
+			{ shape: t, parentOffset: new Vector3(0,0,0) },
+			new Vector3(0,1,0),
+			new Vector3(0,0,0)
+		);
+
+		expect(testResult).toBe(null);
+	});
+
+	it("Cylinder x Triangle moving intersecting", () => {
+		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+		const t = new Triangle(
+			new Vector3(1,5,0),
+			new Vector3(1,5,1),
+			new Vector3(0,5,1)
+		);
+
+		const testResult = SAT.test(
+			{ shape: c, parentOffset: new Vector3(0,2,0) },
+			{ shape: t, parentOffset: new Vector3(0,0,0) },
+			new Vector3(0,1,0),
+			new Vector3(0,0,0)
+		);
+
+		expect(testResult).not.toBe(null);
+		expect(testResult.normal.x).toBeCloseTo(0);
+		expect(testResult.normal.y).toBeCloseTo(-1);
+		expect(testResult.normal.z).toBeCloseTo(0);
+	});
 });

@@ -50,7 +50,12 @@ export class SAT {
 
 	static basic_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		const ac = VecPool.alloc().copy(a.parentOffset).add(a.shape.offset);
-		const bc = VecPool.alloc().copy(b.parentOffset).add(b.shape.offset);
+		// triangles workaround
+		const bc = VecPool.alloc().copy(b.shape.aabb.min).add(b.shape.aabb.max);
+		bc.x /= 2;
+		bc.y /= 2;
+		bc.z /= 2;
+		bc.add(b.parentOffset);
 
 		return [
 			VecPool.alloc().set(
@@ -120,23 +125,29 @@ export class SAT {
 	}
 
 	static sphere_cylinder_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
-		const result = [
-			VecPool.alloc().copy(Vector3.YAxis)
+		const sc = VecPool.alloc().copy(a.shape.offset).add(a.parentOffset);
+		const cc = VecPool.alloc().copy(b.parentOffset).add(b.shape.offset);
+
+		const result: Vector3[] = [
+			VecPool.alloc().set(
+				0,
+				sc.y <= cc.y ? -1 : 1,
+				0
+			)	
 		];
 
 		const s = a.shape as Sphere;
 		const c = b.shape as Cylinder;
 
-		const sc = VecPool.alloc().copy(s.offset).add(a.parentOffset);
-		const dist = sc.dot(Vector3.YAxis);
-		const closestOnY = VecPool.alloc().copy(Vector3.YAxis);
+		const dist = sc.dot(result[0]);
+		const closestOnY = VecPool.alloc().copy(result[0]);
 		closestOnY.x *= dist;
 		closestOnY.y *= dist;
 		closestOnY.z *= dist;
 		const secondAxis = sc.sub(closestOnY);
 
 		result.push(secondAxis);
-		result.push(VecPool.alloc().copy(Vector3.YAxis).cross(secondAxis));
+		result.push(VecPool.alloc().copy(result[0]).cross(secondAxis));
 
 		return result;
 	}
@@ -187,8 +198,18 @@ export class SAT {
 	}
 
 	static cylinder_triangle_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+		const tc = VecPool.alloc().copy(b.shape.aabb.min).add(b.shape.aabb.max);
+		tc.x /= 2;
+		tc.y /= 2;
+		tc.z /= 2;
+		const cc = VecPool.alloc().copy(a.parentOffset).add(a.shape.offset);
+
 		const result: Vector3[] = [
-			VecPool.alloc().copy(Vector3.YAxis)
+			VecPool.alloc().set(
+				0,
+				cc.y <= tc.y ? -1 : 1,
+				0
+			)	
 		];
 
 		const triangle = b.shape as Triangle;
@@ -201,9 +222,9 @@ export class SAT {
 		result.push(e1);
 		result.push(e2);
 		result.push(VecPool.alloc().copy(e0).cross(e1));
-		result.push(VecPool.alloc().copy(Vector3.YAxis).cross(e0));
-		result.push(VecPool.alloc().copy(Vector3.YAxis).cross(e1));
-		result.push(VecPool.alloc().copy(Vector3.YAxis).cross(e2));
+		result.push(VecPool.alloc().copy(result[0]).cross(e0));
+		result.push(VecPool.alloc().copy(result[0]).cross(e1));
+		result.push(VecPool.alloc().copy(result[0]).cross(e2));
 
 		return result;
 	}
