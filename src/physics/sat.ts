@@ -612,35 +612,59 @@ export class SAT {
 	static ray_triangle (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
 		const triangle = shape.shape as Triangle;
 		const dir = VecPool.alloc().copy(to).sub(from);
+		const maxT = dir.length();
+		dir.x /= maxT;
+		dir.y /= maxT;
+		dir.z /= maxT;
 
 		const e0 = VecPool.alloc().copy(triangle.b).sub(triangle.a);
-		const e1 = VecPool.alloc().copy(triangle.c).sub(triangle.a);
+		const e1 = VecPool.alloc().copy(triangle.c).sub(triangle.b);
+		const e2 = VecPool.alloc().copy(triangle.a).sub(triangle.c);
 
-		const H = VecPool.alloc().copy(dir).cross(e0);
-		const det = e0.dot(H);
+		const n = VecPool.alloc().copy(e0).cross(e1).normalize();
+		
+		const det = dir.dot(n);
 
 		if (det > -1e-8 && det < 1e-8) return null;
 
-		const invDet = 1/det;
+		const H = VecPool.alloc().copy(triangle.a).sub(from);
+		const t = n.dot(H)/det;
 
-		const T = VecPool.alloc().copy(from).sub(triangle.a);
+		if (t <= 0 || t > maxT) return null;
 
-		const u = T.dot(H) * invDet;
-		if (u < 0 || u > 1) return null;
+		const P = VecPool.alloc().copy(dir);
+		P.x *= t;
+		P.y *= t;
+		P.z *= t;
+		P.add(from);
 
-		const q = VecPool.alloc().copy(T).cross(e0);
+		// first edge
+		let toP = VecPool.alloc().copy(P).sub(triangle.a);
+		let edge = VecPool.alloc().copy(e0);
+		edge.cross(toP);
+		let side = n.dot(edge);
 
-		const v = dir.dot(q) * invDet;
+		if (side < 0) return null;
 
-		if (v < 0 || u + v > 1) return null;
+		// second edge
+		toP.copy(P).sub(triangle.b);
+		edge.copy(e1);
+		edge.cross(toP);
+		side = n.dot(edge);
 
-		const t = e1.dot(q) * invDet;
+		if (side < 0) return null;
 
-		if (t < 0 || t > 1) return null;
+		// third edge
+		toP.copy(P).sub(triangle.c);
+		edge.copy(e2);
+		edge.cross(toP);
+		side = n.dot(edge);
 
-		const hitPoint = VecPool.alloc().copy(dir).scale(t).add(from);
-	    const normal = VecPool.alloc().copy(e0).cross(e1).normalize();
-	    const distance = VecPool.alloc().copy(hitPoint).sub(from).length() | 0;
+		if (side < 0) return null;
+
+		const hitPoint = P;
+	    const normal = n;
+	    const distance = VecPool.alloc().copy(hitPoint).sub(from).length();
 
 	    return { t, hitPoint, normal, distance };
 	}
