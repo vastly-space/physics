@@ -11,7 +11,9 @@ import type { Collision } from "./physics/sat.js"
 import { divTrunc } from "./math/utils.js"
 import { VecPool, AABBPool } from "./utils/pool.js"
 import Trimesh from "./physics/shapes/trimesh.js"
-import { MAX_DEPENETRATION_ITERATIONS } from "./constants.js"
+import { MAX_DEPENETRATION_ITERATIONS, STEP_UP_HEIGHT } from "./constants.js"
+
+const COS_60 = -0.5;
 
 interface CollisionCandidate {
 	body: StaticBody | KinematicBody | DynamicBody;
@@ -179,10 +181,13 @@ function depenetrationPhase (sourceBody: DynamicBody, candidates: CollisionCandi
 	}
 }
 
-function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[]): SolveResult {
+function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[], applyStepUp: boolean = false): SolveResult {
 	const result: CollisionEvent[] = [];
 	const sourcePosition = VecPool.alloc().copy(sourceBody.position);
-	const sourceVelocity = VecPool.alloc().copy(sourceBody.velocity);
+	if (applyStepUp) {
+		sourcePosition.y += STEP_UP_HEIGHT;
+	}
+	const sourceVelocity = sourceBody.velocity;
 	let realCollisions: { candidate: CollisionCandidate, collision: Collision }[] = [];
 
 	/*
@@ -262,7 +267,7 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[])
 				}
 			}
 
-			if (realCollisions.length === 0) {
+			if (realCollisions.length === 0 || sourceBody.kinematicBehavior) {
 				sourcePosition.add(sourceVelocity);
 				break;
 			} else {
@@ -293,7 +298,45 @@ function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<numb
 	VecPool.reset();
 
 	let candidates = broadphase(sourceBody.id, staticOctree, statics, kinematics, dynamics);
-	return narrowPhase(sourceBody, candidates);
+	const result = narrowPhase(sourceBody, candidates, false);
+
+	if (!sourceBody.kinematicBehavior && !result.locked) {
+		/*
+			STEP UP STRATEGY
+		*/
+		let needStepUp = false;
+		const velocity = sourceBody.velocity;
+		velocity.y = 0;
+		velocity.normalize();
+
+		for (const event of result.events) {
+			if (event.body2.isTrigger) continue;
+
+			if (event.normal.dot(velocity) >= COS_60) continue;
+
+			needStepUp = true;
+			break;
+		}
+
+		if (!needStepUp) return result;
+
+		const afterStepUp = narrowPhase(sourceBody, candidates, true);
+
+		if (afterStepUp.locked) return result;
+
+		// compare positions with/without step up along velocity axis
+
+		const first = result.desiredPosition.dot(velocity);
+		const second = afterStepUp.desiredPosition.dot(velocity);
+
+		if (second > first) {
+			return afterStepUp;
+		} else {
+			return result;
+		}
+	} else {
+		return result;
+	}
 }
 
 export {

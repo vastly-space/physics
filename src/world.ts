@@ -12,9 +12,8 @@ import type { CollisionEvent } from "./solver.js"
 import { ReliableChannel } from "./channels/reliableChannel.js"
 import SyncChannel from "./channels/syncChannel.js"
 import { VecPool } from "./utils/pool.js"
-import { GLOBAL_GRAVITY, MAX_DOWN_SPEED } from "./constants.js"
+import { GLOBAL_GRAVITY, MAX_DOWN_SPEED, STEP_UP_HEIGHT } from "./constants.js"
 
-type Body = StaticBody | KinematicBody | DynamicBody;
 
 const MaxWorldBox = 2147483647 * 2;
 
@@ -23,6 +22,8 @@ export interface WorldOptions {
 	tickrate: number;
 	networking: "host" | "client";
 }
+
+type Body = StaticBody | KinematicBody | DynamicBody;
 
 export class World {
 	private bodyCounter: number = 0;
@@ -131,9 +132,7 @@ export class World {
 			d.preStep();
 
 			const tickResult = solve(d, this.octree, this.statics, this.kinematics, this.dynamics);
-			/*
-				STEP UP STRATEGY
-			*/
+
 			d.position = tickResult.desiredPosition;
 			d.supportedBy = -1;
 
