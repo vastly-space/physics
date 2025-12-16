@@ -12,6 +12,7 @@ export interface Collision {
 	normal: Vector3;
 	tEnter: number;
 	tExit: number;
+	depth: number;
 }
 
 export interface ShapeWrapper {
@@ -36,7 +37,7 @@ export class SAT {
 			const p1 = aMax - bMin;
 			const p2 = bMax - aMin;
 
-			return [0, 1, Math.min(p1, p2)];
+			return [0, Infinity, Math.min(p1, p2)];
 		} else {
 			const t1 = (bMin - aMax) / vel;
 			const t2 = (bMax - aMin) / vel;
@@ -347,7 +348,8 @@ export class SAT {
 		return {
 			normal: testAxes[bestAxisIndex],
 			tEnter: tEnter,
-			tExit: tExit
+			tExit: tExit,
+			depth: bestAxisPenetration
 		}
 	}
 

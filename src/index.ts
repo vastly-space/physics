@@ -16,7 +16,7 @@ import { Controller } from "./controller/controller.js"
 import { snapVecToDir, getVelocityFromDir } from "./controller/directionsTable.js"
 import TransformationSystem from "./transformations/transformationSystem.js"
 import { Transformation } from "./transformations/transformation.js"
-import { solve, CollisionEventTypeMap } from "./solver.js"
+import { solve, MAX_DEPENETRATION_ITERATIONS } from "./solver.js"
 import { ReliableChannel } from "./channels/reliableChannel.js"
 import { Pool, VecPool } from "./utils/pool.js"
 
@@ -26,7 +26,7 @@ import type { OctItem } from "./math/octree.js"
 import type { ControllerState } from "./controller/controller.js"
 import type { TransformationKind, ActionData } from "./transformations/transformation.js"
 import type { ShapeWrapper, Collision } from "./physics/sat.js"
-import type { CollisionEventType, CollisionEvent } from "./solver.js"
+import type { CollisionEvent } from "./solver.js"
 import type { CollisionListener } from "./channels/reliableChannel.js"
 
 export type {
@@ -38,7 +38,6 @@ export type {
 	ActionData,
 	ShapeWrapper,
 	Collision,
-	CollisionEventType,
 	CollisionEvent,
 	CollisionListener
 }
@@ -65,8 +64,8 @@ export {
 	TransformationSystem, 
 	Transformation,
 	solve,
-	CollisionEventTypeMap,
 	ReliableChannel, 
 	Pool,
-	VecPool 
+	VecPool,
+	MAX_DEPENETRATION_ITERATIONS
 }

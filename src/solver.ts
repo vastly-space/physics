@@ -12,25 +12,24 @@ import { divTrunc } from "./math/utils.js"
 import { VecPool, AABBPool } from "./utils/pool.js"
 import Trimesh from "./physics/shapes/trimesh.js"
 
+let MAX_DEPENETRATION_ITERATIONS = 3;
+
 interface CollisionCandidate {
 	body: StaticBody | KinematicBody | DynamicBody;
 	shape?: Shape;
 	triangleIndex?: number;
 }
 
-type CollisionEventType = 0 | 1 | 2;
-
-const CollisionEventTypeMap = {
-	"triggerEnter": 0,
-	"triggerExit": 1,
-	"collide": 2
-}
-
 interface CollisionEvent {
-	type: CollisionEventType;
 	body1: DynamicBody;
 	body2: StaticBody | KinematicBody | DynamicBody;
 	normal: Vector3;
+}
+
+interface SolveResult {
+	desiredPosition: Vector3;
+	locked: boolean;
+	events: CollisionEvent[]; 
 }
 
 function broadphase (dynamicId: number, staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): CollisionCandidate[] {
@@ -80,12 +79,128 @@ function broadphase (dynamicId: number, staticOctree: Octree, statics: Map<numbe
 	return result;
 }
 
-function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[]): { desiredPosition: Vector3; events: CollisionEvent[] } {
+function depenetrationPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[], sourcePosition: Vector3): [boolean, CollisionEvent[]] {
+	let locked: boolean = false;
+	const depPos: Vector3 = VecPool.alloc().copy(sourcePosition);
+
+	let iterations = 0;
+	let hasPenetration = false;
+
+	do {
+		hasPenetration = false;
+		let biggestPenetration: Vector3 | null = null;
+		let biggestPenetrationDepth: number = -Infinity;
+
+		for (const candidate of candidates) {
+			for (const shape of sourceBody.shapes) {
+				if (candidate.triangleIndex !== undefined) {
+					const res = SAT.test(
+						{ parentOffset: depPos, shape: shape },
+						{ parentOffset: candidate.body.position, shape: (candidate.shape as Trimesh).triangles[candidate.triangleIndex] },
+						Vector3.Zero,
+						Vector3.Zero
+					);
+
+					if (res !== null && res.depth >= 2 && res.depth > biggestPenetrationDepth) {
+						hasPenetration = true;
+						biggestPenetration = VecPool.alloc().copy(res.normal).scale(res.depth)
+					}
+				} else {
+					for (const cShape of candidate.body.shapes) {
+						const res = SAT.test(
+							{ parentOffset: depPos, shape: shape },
+							{ parentOffset: candidate.body.position, shape: cShape },
+							Vector3.Zero,
+							Vector3.Zero
+						);
+
+						if (res !== null && res.depth >= 2 && res.depth > biggestPenetrationDepth) {
+							hasPenetration = true;
+							biggestPenetration = VecPool.alloc().copy(res.normal).scale(res.depth)
+						}
+					}
+				}
+			}
+		}
+
+		// move out by biggest penetration
+		if (hasPenetration) {
+			depPos.add(biggestPenetration!);
+		}
+
+		iterations++;
+	} while (hasPenetration && iterations < MAX_DEPENETRATION_ITERATIONS);
+
+	if (hasPenetration) {
+		let events: CollisionEvent[] = [];
+
+		for (const candidate of candidates) {
+			for (const shape of sourceBody.shapes) {
+				if (candidate.triangleIndex !== undefined) {
+					const res = SAT.test(
+						{ parentOffset: sourcePosition, shape: shape },
+						{ parentOffset: candidate.body.position, shape: (candidate.shape as Trimesh).triangles[candidate.triangleIndex] },
+						Vector3.Zero,
+						Vector3.Zero
+					);
+
+					if (res !== null) {
+						events.push({
+							body1: sourceBody,
+							body2: candidate.body,
+							normal: res.normal
+						});
+					}
+				} else {
+					for (const cShape of candidate.body.shapes) {
+						const res = SAT.test(
+							{ parentOffset: sourcePosition, shape: shape },
+							{ parentOffset: candidate.body.position, shape: cShape },
+							Vector3.Zero,
+							Vector3.Zero
+						);
+
+						if (res !== null) {
+							events.push({
+								body1: sourceBody,
+								body2: candidate.body,
+								normal: res.normal
+							});
+						}
+					}
+				}
+			}
+		}
+
+		return [true, events];
+	} else {
+		sourcePosition.copy(depPos);
+
+		return [false, []];
+	}
+}
+
+function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[]): SolveResult {
 	const result: CollisionEvent[] = [];
 	const sourcePosition = VecPool.alloc().copy(sourceBody.position);
 	const sourceVelocity = VecPool.alloc().copy(sourceBody.velocity);
 	let realCollisions: { candidate: CollisionCandidate, collision: Collision }[] = [];
 
+	/*
+		DEPENETRATION
+	*/
+	const depResult = depenetrationPhase(sourceBody, candidates, sourcePosition);
+	if (depResult[0]) {
+		return {
+			desiredPosition: sourcePosition,
+			events: depResult[1],
+			locked: true
+		}
+	}
+
+	/*
+		NARROWPHASE
+	*/
 	while (sourceVelocity.lengthSquared() >= 1) {
 		for (const candidate of candidates) {
 			for (const shape of sourceBody.shapes) {
@@ -133,7 +248,6 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[])
 
 				if (c.collision.tEnter >= 0) {
 					result.push({
-						type: 0,
 						body1: sourceBody,
 						body2: c.candidate.body,
 						normal: c.collision.normal
@@ -142,7 +256,6 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[])
 
 				if (c.collision.tExit <= 1) {
 					result.push({
-						type: 1,
 						body1: sourceBody,
 						body2: c.candidate.body,
 						normal: c.collision.normal
@@ -171,11 +284,12 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[])
 
 	return {
 		desiredPosition: sourcePosition,
+		locked: false,
 		events: result
 	}
 }
 
-function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): { desiredPosition: Vector3; events: CollisionEvent[] } {
+function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): SolveResult {
 	AABBPool.reset();
 	VecPool.reset();
 
@@ -185,10 +299,10 @@ function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<numb
 
 export {
 	solve,
-	CollisionEventTypeMap
+	MAX_DEPENETRATION_ITERATIONS
 }
 
 export type {
-	CollisionEventType,
-	CollisionEvent
+	CollisionEvent,
+	SolveResult
 }
