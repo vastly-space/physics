@@ -11,8 +11,7 @@ import type { Collision } from "./physics/sat.js"
 import { divTrunc } from "./math/utils.js"
 import { VecPool, AABBPool } from "./utils/pool.js"
 import Trimesh from "./physics/shapes/trimesh.js"
-
-let MAX_DEPENETRATION_ITERATIONS = 3;
+import { MAX_DEPENETRATION_ITERATIONS } from "./constants.js"
 
 interface CollisionCandidate {
 	body: StaticBody | KinematicBody | DynamicBody;

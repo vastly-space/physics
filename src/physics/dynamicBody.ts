@@ -1,6 +1,7 @@
 import Vector3 from "../math/vector3.js"
 import AABB from "../math/aabb.js"
 import KinematicBody from "./kinematicBody.js"
+import { MAX_SLOPE } from "../constants.js"
 
 import { VecPool } from "../utils/pool.js"
 
@@ -50,7 +51,29 @@ export default class DynamicBody extends KinematicBody {
 	}
 
 	get velocity (): Vector3 {
-		return (new Vector3()).copy(this._controllerVelocity).add(this._environmentalVelocity);
+		const result = VecPool.alloc().copy(this._controllerVelocity).add(this._environmentalVelocity);
+
+		if (this._supportedBy !== -1) {
+			if (this._groundNormal.y >= MAX_SLOPE) {
+				// needs clipping
+				let slopeFactor = (this.groundNormal.y - MAX_SLOPE)/(1 - MAX_SLOPE);
+				slopeFactor = Math.min(1, slopeFactor);
+				slopeFactor = Math.max(0, slopeFactor);
+
+				const vDot = result.dot(this._groundNormal);
+				const vNormal = VecPool.alloc().copy(this._groundNormal);
+				vNormal.x *= vDot;
+				vNormal.y *= vDot;
+				vNormal.z *= vDot;
+				result.sub(vNormal);
+
+				if (vDot > 0) {
+					result.add(vNormal);
+				}
+			}
+		}
+		
+		return result;
 	}
 
 	get kinematicBehavior (): boolean {

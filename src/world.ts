@@ -12,6 +12,7 @@ import type { CollisionEvent } from "./solver.js"
 import { ReliableChannel } from "./channels/reliableChannel.js"
 import SyncChannel from "./channels/syncChannel.js"
 import { VecPool } from "./utils/pool.js"
+import { GLOBAL_GRAVITY, MAX_DOWN_SPEED } from "./constants.js"
 
 type Body = StaticBody | KinematicBody | DynamicBody;
 
@@ -19,20 +20,14 @@ const MaxWorldBox = 2147483647 * 2;
 
 export interface WorldOptions {
 	worldCubeSize?: number;
-	gravity: number;
-	defaultSpeed: number;
 	tickrate: number;
 	networking: "host" | "client";
-	maxDownSpeed: number;
 }
 
 export class World {
 	private bodyCounter: number = 0;
 	private _tick: number = 0;
 	private _tickrate: number;
-	private _gravity: number;
-	private maxDownSpeed: number;
-	private defaultSpeed: number;
 	private statics: Map<number, StaticBody> = new Map();
 	private octree: Octree;
 	private kinematics: Map<number, KinematicBody> = new Map();
@@ -51,9 +46,6 @@ export class World {
 			new Vector3(-halfSize, -halfSize, -halfSize),
 			new Vector3(halfSize, halfSize, halfSize)
 		));
-		this._gravity = options.gravity;
-		this.maxDownSpeed = options.maxDownSpeed;
-		this.defaultSpeed = options.defaultSpeed;
 		this._tickrate = options.tickrate;
 		this.transformationSystem = new TransformationSystem(this._tick, this._tickrate);
 		this.networking = options.networking;
@@ -69,14 +61,6 @@ export class World {
 
 	get tickrate (): number {
 		return this._tickrate;
-	}
-
-	get gravity (): number {
-		return this._gravity;
-	}
-
-	set gravity (val: number) {
-		this._gravity = val;
 	}
 
 	step () {
@@ -97,17 +81,14 @@ export class World {
 				if (d.supportedBy !== -1) {
 					// we have a platform that carries body
 					if (this.kinematics.has(d.supportedBy)) {
-						/*
-							SLOPE
-						*/
 						envVelocity.add(this.kinematics.get(d.supportedBy)!.motionDelta);
 					} else if (this.dynamics.has(d.supportedBy)) {
 						deps[id] = d.supportedBy;
 					}
 				} else {
-					envVelocity.y = d.environmentalVelocity.y - ((this._gravity/this._tickrate) | 0);
+					envVelocity.y = d.environmentalVelocity.y - ((GLOBAL_GRAVITY/this._tickrate) * d.gravityMultiplier | 0);
 
-					if (envVelocity.y < this.maxDownSpeed) envVelocity.y = this.maxDownSpeed;
+					if (envVelocity.y < MAX_DOWN_SPEED) envVelocity.y = MAX_DOWN_SPEED;
 				}
 			}
 
@@ -137,10 +118,6 @@ export class World {
 					delete deps[downId];
 					continue;
 				}
-				
-				/*
-					SLOPE
-				*/
 
 				upBody.environmentalVelocity.add(downBody.velocity);
 
@@ -193,7 +170,7 @@ export class World {
 				break;
 			case "dynamic":
 				this.dynamics.set(body.id, body as DynamicBody);
-				this.controllers.set(body.id, new Controller(body as DynamicBody, this.defaultSpeed));
+				this.controllers.set(body.id, new Controller(body as DynamicBody));
 				break;
 		}
 	}
