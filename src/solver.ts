@@ -295,7 +295,14 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 					sourceVelocity.addScaled(realCollisions[0].collision.normal, -vn);
 				}
 
-				toRemove.push(realCollisions[0].candidate)
+				result.push({
+					body1: sourceBody,
+					body2: realCollisions[0].candidate.body,
+					normal: realCollisions[0].collision.normal,
+					exitFlag: true
+				});
+
+				toRemove.push(realCollisions[0].candidate);
 			}
 
 			candidates = candidates.filter(c => toRemove.includes(c));
@@ -323,6 +330,9 @@ function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<numb
 		let needStepUp = false;
 		const velocity = sourceBody.velocity;
 		velocity.y = 0;
+
+		if (velocity.isZero()) return result;
+
 		velocity.normalize();
 
 		for (const event of result.events) {
