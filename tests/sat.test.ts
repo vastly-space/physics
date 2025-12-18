@@ -15,8 +15,8 @@ describe("SAT tests", () => {
 		expect(SAT.swept_interval_test(0, 5, 6, 7, 0)).toBe(null);
 		expect(SAT.swept_interval_test(0, 5,-8, -2, 0)).toBe(null);
 		// static intersecting
-		expect(SAT.swept_interval_test(0, 5, 3, 7, 0)).toEqual([0,1,2]);
-		expect(SAT.swept_interval_test(-4, 5,-8, -2, 0)).toEqual([0,1,2]);
+		expect(SAT.swept_interval_test(0, 5, 3, 7, 0)).toEqual([0,Infinity,2]);
+		expect(SAT.swept_interval_test(-4, 5,-8, -2, 0)).toEqual([0,Infinity,2]);
 		// moving non-intersecting
 		const sweptNeg = SAT.swept_interval_test(0, 5, 10, 15, -3)
 		const sweptPos = SAT.swept_interval_test(0, 5, 10, 15, 1);
@@ -67,7 +67,7 @@ describe("SAT tests", () => {
 
 		expect(testResult).not.toBe(null);
 		expect(testResult.tEnter).toBe(0);
-		expect(testResult.tExit).toBe(1);
+		expect(testResult.tExit).toBe(Infinity);
 		expect(testResult.normal.x).toBeCloseTo(0);
 		expect(testResult.normal.y).toBeCloseTo(-1);
 		expect(testResult.normal.z).toBeCloseTo(0);
@@ -365,6 +365,23 @@ describe("SAT tests", () => {
 		expect(testResult).not.toBe(null);
 		expect(testResult.normal.x).toBeCloseTo(-1);
 		expect(testResult.normal.y).toBeCloseTo(0);
+		expect(testResult.normal.z).toBeCloseTo(0);
+	});
+
+	it("Cylinder x Box moving intersecting 2", () => {
+		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+		const b = new Box(new Vector3(0,0,0), 10, 2, 10);
+
+		const testResult = SAT.test(
+			{ shape: c, parentOffset: new Vector3(0,5,0) },
+			{ shape: b, parentOffset: new Vector3(0,0,0) },
+			new Vector3(0,-6,0),
+			new Vector3(0,0,0)
+		);
+
+		expect(testResult).not.toBe(null);
+		expect(testResult.normal.x).toBeCloseTo(0);
+		expect(testResult.normal.y).toBeCloseTo(1);
 		expect(testResult.normal.z).toBeCloseTo(0);
 	});
 

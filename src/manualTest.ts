@@ -8,12 +8,13 @@ import Sphere from "./physics/shapes/sphere.js"
 import Cylinder from "./physics/shapes/cylinder.js"
 import Triangle from "./physics/shapes/triangle.js"
 
-const shape = new Triangle(
-	new Vector3(0,5,3),
-	new Vector3(3,5,3),
-	new Vector3(3,5,0)
-);
-const from = new Vector3(0,0,0);
-const to = new Vector3(3,10,5);
+const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+const b = new Box(new Vector3(0,0,0), 10, 2, 10);
 
-let testResult = SAT.ray_triangle({ shape: shape, parentOffset: new Vector3() }, from, to);
+debugger;
+const testResult = SAT.test(
+	{ shape: c, parentOffset: new Vector3(0,5,0) },
+	{ shape: b, parentOffset: new Vector3(0,0,0) },
+	new Vector3(0,-6,0),
+	new Vector3(0,0,0)
+);
