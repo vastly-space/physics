@@ -190,7 +190,7 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 	if (applyStepUp) {
 		sourcePosition.y += STEP_UP_HEIGHT;
 	}
-	const sourceVelocity = sourceBody.velocity.scale(1000/TICKRATE);
+	const sourceVelocity = sourceBody.velocity.scale(TICKRATE/1000);
 	let realCollisions: { candidate: CollisionCandidate, collision: Collision }[] = [];
 
 	/*
@@ -225,12 +225,23 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 						collision
 					});
 				} else {
+					let cVel: Vector3 = Vector3.Zero;
+
+					switch (candidate.body.kind) {
+						case "kinematic":
+							cVel = (candidate.body as KinematicBody).motionDelta;
+							break;
+						case "dynamic":
+							cVel = (candidate.body as DynamicBody).velocity;
+							break;
+					}
+
 					for (const cShape of candidate.body.shapes) {
 						const collision = SAT.test(
 							{ parentOffset: sourcePosition, shape: shape },
 							{ parentOffset: candidate.body.position, shape: cShape },
 							sourceVelocity,
-							candidate.body.kind === "kinematic" ? (candidate.body as KinematicBody).motionDelta : (candidate.body as DynamicBody).velocity
+							cVel
 						);
 
 						if (collision !== null) realCollisions.push({

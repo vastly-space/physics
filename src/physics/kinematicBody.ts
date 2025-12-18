@@ -10,6 +10,10 @@ export default class KinematicBody extends StaticBody {
 	protected _motionDelta: Vector3 = new Vector3();
 	protected _sweptAABB: AABB = new AABB(new Vector3(), new Vector3());
 
+	get position (): Vector3 {
+		return super.position;
+	}
+
 	get scriptMove (): boolean {
 		return this._scriptMove;
 	}

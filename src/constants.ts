@@ -1,6 +1,6 @@
 let GLOBAL_SPEED: number = 5000;
 let MAX_DOWN_SPEED: number = -10000;
-let GLOBAL_GRAVITY: number = -9870;
+let GLOBAL_GRAVITY: number = 9870;
 let MAX_DEPENETRATION_ITERATIONS: number = 3;
 let MAX_SLOPE: number = Math.cos(45 * Math.PI/180);
 let STEP_UP_HEIGHT: number = 200;

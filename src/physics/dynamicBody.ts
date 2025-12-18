@@ -115,7 +115,7 @@ export default class DynamicBody extends KinematicBody {
 		if (this._kinematicBehavior) {
 			super.preStep();
 		} else {
-			const tickV = VecPool.alloc().copy(this.velocity).scale(1000/TICKRATE);
+			const tickV = this.velocity.scale(TICKRATE/1000);
 
 			this._sweptAABB.copy(this._aabb).expand(tickV);
 		}
@@ -133,5 +133,9 @@ export default class DynamicBody extends KinematicBody {
 	set position (val: Vector3) {
 		const diff = VecPool.alloc().copy(val).sub(this._position);
 		this.moveBy(diff);
+	}
+
+	get position (): Vector3 {
+		return super.position;
 	}
 }
