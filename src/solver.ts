@@ -25,6 +25,7 @@ interface CollisionEvent {
 	body1: DynamicBody;
 	body2: StaticBody | KinematicBody | DynamicBody;
 	normal: Vector3;
+	exitFlag: boolean;
 }
 
 interface SolveResult {
@@ -149,7 +150,8 @@ function depenetrationPhase (sourceBody: DynamicBody, candidates: CollisionCandi
 						events.push({
 							body1: sourceBody,
 							body2: candidate.body,
-							normal: res.normal
+							normal: res.normal,
+							exitFlag: false
 						});
 					}
 				} else {
@@ -165,7 +167,8 @@ function depenetrationPhase (sourceBody: DynamicBody, candidates: CollisionCandi
 							events.push({
 								body1: sourceBody,
 								body2: candidate.body,
-								normal: res.normal
+								normal: res.normal,
+								exitFlag: false
 							});
 						}
 					}
@@ -254,7 +257,8 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 					result.push({
 						body1: sourceBody,
 						body2: c.candidate.body,
-						normal: c.collision.normal
+						normal: c.collision.normal,
+						exitFlag: false
 					});
 				}
 
@@ -262,7 +266,8 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 					result.push({
 						body1: sourceBody,
 						body2: c.candidate.body,
-						normal: c.collision.normal
+						normal: c.collision.normal,
+						exitFlag: true
 					});
 				}
 			}

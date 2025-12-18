@@ -17,6 +17,7 @@ export default class StaticBody {
 	protected _isTrigger: boolean;
 	protected _canCollide: boolean = true;
 	protected _layer: number;
+	protected _triggerIntersections: Set<number> = new Set();
 
 	constructor (id: number, shapes: Shape[], position: Vector3, isTrigger: boolean, layer: number = 0) {
 		this._id = id;
@@ -85,6 +86,10 @@ export default class StaticBody {
 
 	set anchorTick (val: number) {
 		this._anchorTick = val;
+	}
+
+	get triggerIntersections (): Set<number> {
+		return this._triggerIntersections;
 	}
 
 	octreeInsert (tree: Octree) {

@@ -17,7 +17,6 @@ import { snapVecToDir, getVelocityFromDir } from "./controller/directionsTable.j
 import TransformationSystem from "./transformations/transformationSystem.js"
 import { Transformation } from "./transformations/transformation.js"
 import { solve } from "./solver.js"
-import { ReliableChannel } from "./channels/reliableChannel.js"
 import { Pool, VecPool } from "./utils/pool.js"
 import { GLOBAL_SPEED, MAX_DOWN_SPEED, GLOBAL_GRAVITY, MAX_DEPENETRATION_ITERATIONS, MAX_SLOPE } from "./constants.js"
 
@@ -28,7 +27,6 @@ import type { ControllerState } from "./controller/controller.js"
 import type { TransformationKind, ActionData } from "./transformations/transformation.js"
 import type { ShapeWrapper, Collision } from "./physics/sat.js"
 import type { CollisionEvent } from "./solver.js"
-import type { CollisionListener } from "./channels/reliableChannel.js"
 
 export type {
 	WorldOptions,
@@ -39,8 +37,7 @@ export type {
 	ActionData,
 	ShapeWrapper,
 	Collision,
-	CollisionEvent,
-	CollisionListener
+	CollisionEvent
 }
 
 export {
@@ -65,7 +62,6 @@ export {
 	TransformationSystem, 
 	Transformation,
 	solve,
-	ReliableChannel, 
 	Pool,
 	VecPool,
 	MAX_DEPENETRATION_ITERATIONS

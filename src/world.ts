@@ -8,9 +8,7 @@ import DynamicBody from "./physics/dynamicBody.js"
 import { Controller } from "./controller/controller.js"
 import TransformationSystem from "./transformations/transformationSystem.js"
 import { solve } from "./solver.js"
-import type { CollisionEvent } from "./solver.js"
-import { ReliableChannel } from "./channels/reliableChannel.js"
-import SyncChannel from "./channels/syncChannel.js"
+import type { SolveResult } from "./solver.js"
 import { VecPool } from "./utils/pool.js"
 import { GLOBAL_GRAVITY, MAX_DOWN_SPEED, STEP_UP_HEIGHT } from "./constants.js"
 
@@ -24,8 +22,28 @@ export interface WorldOptions {
 }
 
 type Body = StaticBody | KinematicBody | DynamicBody;
+type TickEventNumeric = 0 | 1 | 2;
+
+export interface TickEvent {
+	type: TickEventNumeric;
+	body1: Body;
+	body2: Body;
+	normal: Vector3;
+}
 
 export class World {
+	public static readonly TickEventTypes: Record<TickEventNumeric, string> = {
+		0: "triggerEnter",
+		1: "triggerExit",
+		2: "collide"
+	}
+
+	public static readonly rTickEventTypes: Record<string, TickEventNumeric> = {
+		triggerEnter: 0,
+		triggerExit: 1,
+		collide: 2
+	}
+
 	private bodyCounter: number = 0;
 	private _tick: number = 0;
 	private _tickrate: number;
@@ -36,8 +54,6 @@ export class World {
 	private controllers: Map<number, Controller> = new Map();
 	private transformationSystem: TransformationSystem;
 	private networking: string;
-	public reliableChannel: ReliableChannel = new ReliableChannel();
-	public syncChannel: SyncChannel = new SyncChannel();
 
 	constructor (options: WorldOptions) {
 		if (options.worldCubeSize !== undefined && options.worldCubeSize > MaxWorldBox) throw new Error("World cube size extending the limit");
@@ -64,7 +80,7 @@ export class World {
 		return this._tickrate;
 	}
 
-	step () {
+	step (): TickEvent[] {
 		this._tick++;
 
 		this.transformationSystem.step(this._tick, this.kinematics, this.dynamics);
@@ -126,7 +142,7 @@ export class World {
 			}
 		}
 
-		let tickEvents: CollisionEvent[] = [];
+		let tickEvents: TickEvent[] = [];
 
 		for (const [id, d] of this.dynamics.entries()) {
 			d.preStep();
@@ -147,15 +163,46 @@ export class World {
 				}
 			}
 
-			tickEvents = tickEvents.concat(tickResult.events);
-		}
+			for (const ev of tickResult.events) {
+				if (ev.body2.isTrigger) {
+					if (ev.body2.triggerIntersections.has(ev.body1.id) && ev.exitFlag) {
+						ev.body2.triggerIntersections.delete(ev.body1.id);
+						ev.body1.triggerIntersections.delete(ev.body2.id);
 
-		this.reliableChannel.flush(tickEvents);
+						tickEvents.push({
+							type: World.rTickEventTypes.triggerExit,
+							body1: ev.body1,
+							body2: ev.body2,
+							normal: ev.normal
+						});
+					} else if (!ev.body2.triggerIntersections.has(ev.body1.id) && !ev.exitFlag) {
+						ev.body2.triggerIntersections.add(ev.body1.id);
+						ev.body1.triggerIntersections.add(ev.body2.id);
+
+						tickEvents.push({
+							type: World.rTickEventTypes.triggerEnter,
+							body1: ev.body1,
+							body2: ev.body2,
+							normal: ev.normal
+						});
+					}
+				} else {
+					tickEvents.push({
+						type: World.rTickEventTypes.collide,
+						body1: ev.body1,
+						body2: ev.body2,
+						normal: ev.normal
+					});
+				}
+			}
+		}
 
 		for (const k of this.kinematics.values()) k.postStep(this.tick);
 	    for (const dyn of this.dynamics.values()) dyn.postStep(this.tick);
 
 	    this.tick++;
+
+		return tickEvents;
 	}
 
 	addBody (body: Body) {
@@ -179,8 +226,26 @@ export class World {
 	}
 
 	deleteBody (id: number) {
-		if (this.kinematics.has(id)) this.kinematics.delete(id);
+		if (this.kinematics.has(id)) {
+			const k = this.kinematics.get(id)!;
+			// clear trigger intersections
+			for (const tId of k.triggerIntersections) {
+				const tBody = this.dynamics.get(id);
+
+				tBody?.triggerIntersections.delete(id);
+			}
+
+			this.kinematics.delete(id);
+		}
 		if (this.dynamics.has(id)) {
+			const d = this.dynamics.get(id)!;
+			// clear trigger intersections
+			for (const tId of d.triggerIntersections) {
+				const tBody = this.kinematics.get(tId) || this.statics.get(tId);
+
+				tBody?.triggerIntersections.delete(id);
+			}
+
 			this.dynamics.delete(id);
 		}
 		this.controllers.delete(id);
