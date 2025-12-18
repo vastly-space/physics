@@ -10,15 +10,14 @@ import TransformationSystem from "./transformations/transformationSystem.js"
 import { solve } from "./solver.js"
 import type { SolveResult } from "./solver.js"
 import { VecPool } from "./utils/pool.js"
-import { GLOBAL_GRAVITY, MAX_DOWN_SPEED, STEP_UP_HEIGHT } from "./constants.js"
+import { TICKRATE, GLOBAL_GRAVITY, MAX_DOWN_SPEED, STEP_UP_HEIGHT } from "./constants.js"
 
 
 const MaxWorldBox = 2147483647 * 2;
 
 export interface WorldOptions {
 	worldCubeSize?: number;
-	tickrate: number;
-	networking: "host" | "client";
+	networking: "host" | "client" | "standalone";
 }
 
 type Body = StaticBody | KinematicBody | DynamicBody;
@@ -46,7 +45,6 @@ export class World {
 
 	private bodyCounter: number = 0;
 	private _tick: number = 0;
-	private _tickrate: number;
 	private statics: Map<number, StaticBody> = new Map();
 	private octree: Octree;
 	private kinematics: Map<number, KinematicBody> = new Map();
@@ -63,8 +61,7 @@ export class World {
 			new Vector3(-halfSize, -halfSize, -halfSize),
 			new Vector3(halfSize, halfSize, halfSize)
 		));
-		this._tickrate = options.tickrate;
-		this.transformationSystem = new TransformationSystem(this._tick, this._tickrate);
+		this.transformationSystem = new TransformationSystem(this._tick);
 		this.networking = options.networking;
 	}
 
@@ -74,10 +71,7 @@ export class World {
 
 	set tick (val: number) {
 		this._tick = val;
-	}
-
-	get tickrate (): number {
-		return this._tickrate;
+		this.transformationSystem.tick = val;
 	}
 
 	step (): TickEvent[] {
@@ -103,7 +97,7 @@ export class World {
 						deps[id] = d.supportedBy;
 					}
 				} else {
-					envVelocity.y = d.environmentalVelocity.y - ((GLOBAL_GRAVITY/this._tickrate) * d.gravityMultiplier | 0);
+					envVelocity.y = d.environmentalVelocity.y - (((GLOBAL_GRAVITY/TICKRATE) * d.gravityMultiplier) | 0);
 
 					if (envVelocity.y < MAX_DOWN_SPEED) envVelocity.y = MAX_DOWN_SPEED;
 				}

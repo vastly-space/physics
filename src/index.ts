@@ -18,7 +18,7 @@ import TransformationSystem from "./transformations/transformationSystem.js"
 import { Transformation } from "./transformations/transformation.js"
 import { solve } from "./solver.js"
 import { Pool, VecPool } from "./utils/pool.js"
-import { GLOBAL_SPEED, MAX_DOWN_SPEED, GLOBAL_GRAVITY, MAX_DEPENETRATION_ITERATIONS, MAX_SLOPE } from "./constants.js"
+import { GLOBAL_SPEED, MAX_DOWN_SPEED, GLOBAL_GRAVITY, MAX_DEPENETRATION_ITERATIONS, MAX_SLOPE, TICKRATE } from "./constants.js"
 
 import type { WorldOptions } from "./world.js"
 import type Shape from "./physics/shape.js"
@@ -64,5 +64,6 @@ export {
 	solve,
 	Pool,
 	VecPool,
-	MAX_DEPENETRATION_ITERATIONS
+	MAX_DEPENETRATION_ITERATIONS,
+	TICKRATE
 }

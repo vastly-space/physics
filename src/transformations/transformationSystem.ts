@@ -3,15 +3,14 @@ import { Transformation } from "./transformation.js"
 import type { TransformationKind } from "./transformation.js"
 import KinematicBody from "../physics/kinematicBody.js"
 import DynamicBody from "../physics/dynamicBody.js"
+import { TICKRATE } from "../constants.js"
 
 export default class TransformationSystem {
 	private _tick: number;
-	private tickrate: number;
 	private transformations: Map<number, { counter: number; transformations: Map<number, Transformation> }> = new Map();
 
-	constructor (currentTick: number, tickrate: number) {
+	constructor (currentTick: number) {
 		this._tick = currentTick;
-		this.tickrate = tickrate;
 	}
 
 	addTransformation (bodyId: number, kind: TransformationKind, data: Vector3 | Vector3[], duration: number): number {
@@ -21,7 +20,7 @@ export default class TransformationSystem {
 
 		const tr = this.transformations.get(bodyId);
 		const startTick = this._tick + 1;
-		const endTick = startTick + Math.max(1, Math.round(duration/1000 * this.tickrate));
+		const endTick = startTick + Math.max(1, Math.round(duration/1000 * TICKRATE));
 		const transformationId = tr!.counter++;
 		tr!.transformations.set(transformationId, new Transformation(kind, data, this._tick, startTick, endTick));
 

@@ -11,7 +11,7 @@ import type { Collision } from "./physics/sat.js"
 import { divTrunc } from "./math/utils.js"
 import { VecPool, AABBPool } from "./utils/pool.js"
 import Trimesh from "./physics/shapes/trimesh.js"
-import { MAX_DEPENETRATION_ITERATIONS, STEP_UP_HEIGHT } from "./constants.js"
+import { MAX_DEPENETRATION_ITERATIONS, STEP_UP_HEIGHT, TICKRATE } from "./constants.js"
 
 const COS_60 = -0.5;
 
@@ -190,7 +190,7 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 	if (applyStepUp) {
 		sourcePosition.y += STEP_UP_HEIGHT;
 	}
-	const sourceVelocity = sourceBody.velocity;
+	const sourceVelocity = sourceBody.velocity.scale(1000/TICKRATE);
 	let realCollisions: { candidate: CollisionCandidate, collision: Collision }[] = [];
 
 	/*

@@ -4,6 +4,7 @@ let GLOBAL_GRAVITY: number = -9870;
 let MAX_DEPENETRATION_ITERATIONS: number = 3;
 let MAX_SLOPE: number = Math.cos(45 * Math.PI/180);
 let STEP_UP_HEIGHT: number = 200;
+let TICKRATE: number = 20;
 
 export {
 	GLOBAL_SPEED,
@@ -11,5 +12,6 @@ export {
 	GLOBAL_GRAVITY,
 	MAX_DEPENETRATION_ITERATIONS,
 	MAX_SLOPE,
-	STEP_UP_HEIGHT
+	STEP_UP_HEIGHT,
+	TICKRATE
 }

@@ -1,7 +1,7 @@
 import Vector3 from "../math/vector3.js"
 import AABB from "../math/aabb.js"
 import KinematicBody from "./kinematicBody.js"
-import { MAX_SLOPE } from "../constants.js"
+import { MAX_SLOPE, TICKRATE } from "../constants.js"
 
 import { VecPool } from "../utils/pool.js"
 
@@ -115,7 +115,9 @@ export default class DynamicBody extends KinematicBody {
 		if (this._kinematicBehavior) {
 			super.preStep();
 		} else {
-			this._sweptAABB.copy(this._aabb).expand(this.velocity);
+			const tickV = VecPool.alloc().copy(this.velocity).scale(1000/TICKRATE);
+
+			this._sweptAABB.copy(this._aabb).expand(tickV);
 		}
 	}
 
