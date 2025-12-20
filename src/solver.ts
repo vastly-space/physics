@@ -11,7 +11,7 @@ import type { Collision } from "./physics/sat.js"
 import { divTrunc } from "./math/utils.js"
 import { VecPool, AABBPool } from "./utils/pool.js"
 import Trimesh from "./physics/shapes/trimesh.js"
-import { MAX_DEPENETRATION_ITERATIONS, STEP_UP_HEIGHT, TICKRATE } from "./constants.js"
+import { MAX_DEPENETRATION_ITERATIONS, STEP_UP_HEIGHT, TICKRATE, GROUND_PROBE } from "./constants.js"
 
 const COS_60 = -0.5;
 
@@ -191,7 +191,6 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 		sourcePosition.y += STEP_UP_HEIGHT;
 	}
 	const sourceVelocity = sourceBody.velocity.scale(TICKRATE/1000);
-	let realCollisions: { candidate: CollisionCandidate, collision: Collision }[] = [];
 
 	/*
 		DEPENETRATION
@@ -208,7 +207,9 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 	/*
 		NARROWPHASE
 	*/
-	while (sourceVelocity.lengthSquared() >= 1) {
+	while (sourceVelocity.lengthSquared() >= 100) {
+		let realCollisions: { candidate: CollisionCandidate, collision: Collision }[] = [];
+
 		for (const candidate of candidates) {
 			for (const shape of sourceBody.shapes) {
 				if (candidate.triangleIndex) {
@@ -257,7 +258,6 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 			sourcePosition.add(sourceVelocity);
 			break;
 		} else {
-			let toRemove: CollisionCandidate[] = [];
 			// sort out by time
 			realCollisions.sort((a, b) => a.collision.tEnter - b.collision.tEnter);
 			// skip all trigger bodies events
@@ -301,11 +301,7 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 					normal: realCollisions[0].collision.normal,
 					exitFlag: true
 				});
-
-				toRemove.push(realCollisions[0].candidate);
 			}
-
-			candidates = candidates.filter(c => toRemove.includes(c));
 		}
 	}
 
@@ -321,7 +317,7 @@ function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<numb
 	VecPool.reset();
 
 	let candidates = broadphase(sourceBody.id, staticOctree, statics, kinematics, dynamics);
-	const result = narrowPhase(sourceBody, candidates, false);
+	let result = narrowPhase(sourceBody, candidates, false);
 
 	if (!sourceBody.kinematicBehavior && !result.locked) {
 		/*
@@ -331,43 +327,135 @@ function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<numb
 		const velocity = sourceBody.velocity;
 		velocity.y = 0;
 
-		if (velocity.isZero()) return result;
+		if (!velocity.isZero()) {
+			velocity.normalize();
 
-		velocity.normalize();
+			for (const event of result.events) {
+				if (event.body2.isTrigger) continue;
 
-		for (const event of result.events) {
-			if (event.body2.isTrigger) continue;
+				if (event.normal.dot(velocity) >= COS_60) continue;
 
-			if (event.normal.dot(velocity) >= COS_60) continue;
+				needStepUp = true;
+				break;
+			}
 
-			needStepUp = true;
-			break;
+			if (needStepUp) {
+				const afterStepUp = narrowPhase(sourceBody, candidates, true);
+
+				if (!afterStepUp.locked) {
+					// compare positions with/without step up along velocity axis
+
+					const first = result.desiredPosition.dot(velocity);
+					const second = afterStepUp.desiredPosition.dot(velocity);
+
+					if (second > first) {
+						result = afterStepUp;
+					}
+				}
+			}
 		}
+	}
 
-		if (!needStepUp) return result;
+	return result;
+}
 
-		const afterStepUp = narrowPhase(sourceBody, candidates, true);
+/*
+	GROUND CHECKING
+*/
+function groundBroadphase (dynamicId: number, staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): CollisionCandidate[] {
+	const result: CollisionCandidate[] = [];
 
-		if (afterStepUp.locked) return result;
+	const body = dynamics.get(dynamicId) as DynamicBody;
+	const testAABB = AABBPool.alloc().copy(body.aabb);
+	testAABB.min.y -= GROUND_PROBE;
 
-		// compare positions with/without step up along velocity axis
+	const candidates: OctItem[] = [];
+	staticOctree.queryAABB(testAABB, candidates, body.mask);
 
-		const first = result.desiredPosition.dot(velocity);
-		const second = afterStepUp.desiredPosition.dot(velocity);
+	for (let i=0; i<candidates.length; i++) {
+		const id = candidates[i].id;
+		const sBody = statics.get(id) as StaticBody;
+		const shape = sBody.shapes[candidates[i].shapeIndex];
 
-		if (second > first) {
-			return afterStepUp;
+		result.push({
+			body: sBody,
+			shape: shape,
+			triangleIndex: candidates[i].triangleIndex
+		});
+	}
+
+	for (const [id, candidate] of kinematics.entries()) {
+		if (body.mask !== 0 && candidate.layer !== 0 && ((body.mask & candidate.layer) === 0)) continue;
+
+		const intersects = SAT.testAABB(testAABB, candidate.aabb);
+
+		if (intersects) {
+			result.push({
+				body: candidate
+			})
+		}
+	}
+
+	for (const [id, candidate] of dynamics.entries()) {
+		if (id === dynamicId || (body.mask !== 0 && candidate.layer !== 0 && ((body.mask & candidate.layer) === 0))) continue;
+
+		const intersects = SAT.testAABB(testAABB, candidate.aabb);
+
+		if (intersects) {
+			result.push({
+				body: candidate
+			})
+		}
+	}
+
+	return result;
+}
+
+function groundCheck (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>) {
+	const candidates = groundBroadphase(sourceBody.id, staticOctree, statics, kinematics, dynamics);
+	sourceBody.supportedBy = -1;
+	sourceBody.groundNormal.set(0, 0, 0);
+	const groundProbe = VecPool.alloc();
+	groundProbe.y -= GROUND_PROBE;
+
+	for (const candidate of candidates) {
+		if (candidate.triangleIndex !== undefined) {
+			for (const shape of sourceBody.shapes) {
+				const result = SAT.test(
+					{ parentOffset: sourceBody.position, shape: shape },
+					{ parentOffset: candidate.body.position, shape: (candidate.shape as Trimesh).triangles[candidate.triangleIndex] },
+					groundProbe,
+					Vector3.Zero
+				);
+
+				if (result !== null && result.normal.y > sourceBody.groundNormal.y) {
+					sourceBody.supportedBy = candidate.body.id;
+					sourceBody.groundNormal = result.normal;
+				}
+			}
 		} else {
-			return result;
+			for (const cShape of candidate.body.shapes) {
+				for (const shape of sourceBody.shapes) {
+					const result = SAT.test(
+						{ parentOffset: sourceBody.position, shape: shape },
+						{ parentOffset: candidate.body.position, shape: cShape },
+						groundProbe,
+						Vector3.Zero
+					);
+
+					if (result !== null && result.normal.y > sourceBody.groundNormal.y) {
+						sourceBody.supportedBy = candidate.body.id;
+						sourceBody.groundNormal = result.normal;
+					}
+				}
+			}
 		}
-	} else {
-		return result;
 	}
 }
 
 export {
 	solve,
-	MAX_DEPENETRATION_ITERATIONS
+	groundCheck
 }
 
 export type {

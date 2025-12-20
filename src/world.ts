@@ -7,7 +7,7 @@ import KinematicBody from "./physics/kinematicBody.js"
 import DynamicBody from "./physics/dynamicBody.js"
 import { Controller } from "./controller/controller.js"
 import TransformationSystem from "./transformations/transformationSystem.js"
-import { solve } from "./solver.js"
+import { solve, groundCheck } from "./solver.js"
 import type { SolveResult } from "./solver.js"
 import { VecPool } from "./utils/pool.js"
 import { TICKRATE, GLOBAL_GRAVITY, MAX_DOWN_SPEED, STEP_UP_HEIGHT } from "./constants.js"
@@ -144,18 +144,6 @@ export class World {
 			const tickResult = solve(d, this.octree, this.statics, this.kinematics, this.dynamics);
 
 			d.position = tickResult.desiredPosition;
-			d.supportedBy = -1;
-
-			// update grounds
-			for (const event of tickResult.events) {
-				d.supportedBy = -1;
-
-				if (event.normal.y > 0) {
-					if (event.normal.y > d.groundNormal.y)
-					d.supportedBy = event.body2.id;
-					d.groundNormal = event.normal;
-				}
-			}
 
 			for (const ev of tickResult.events) {
 				if (ev.body2.isTrigger) {
@@ -194,6 +182,11 @@ export class World {
 		for (const k of this.kinematics.values()) k.postStep(this.tick);
 	    for (const dyn of this.dynamics.values()) dyn.postStep(this.tick);
 
+	    // ground check
+    	for (const [id, d] of this.dynamics.entries()) {
+	    	groundCheck(d, this.octree, this.statics, this.kinematics, this.dynamics);
+	    }
+
 	    this.tick++;
 
 		return tickEvents;
@@ -210,7 +203,6 @@ export class World {
 				break;
 			case "dynamic":
 				this.dynamics.set(body.id, body as DynamicBody);
-				this.controllers.set(body.id, new Controller(body as DynamicBody));
 				break;
 		}
 	}

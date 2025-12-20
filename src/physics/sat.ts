@@ -342,7 +342,7 @@ export class SAT {
 			if (tEnter > tExit || tExit < 0) return null;
 		}
 
-		if (tEnter < 0 || tEnter > 1) return null;
+		if (tExit <= 0 || tEnter > 1) return null;
 		if (bestAxisIndex === -1) return null;
 
 		return {

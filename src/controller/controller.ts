@@ -68,6 +68,10 @@ export class Controller {
 	}
 
 	updateSpeed () {
-	    getVelocityFromDir(this._direction, this._pitchAngle, GLOBAL_SPEED * this._speedMultiplier, this._body.controllerVelocity);
+		if (this._state.forward || this._state.backward || this._state.left || this._state.right) {
+	    	getVelocityFromDir(this._direction, this._pitchAngle, GLOBAL_SPEED * this._speedMultiplier, this._body.controllerVelocity);
+	    } else {
+	    	this._body.controllerVelocity.set(0,0,0);
+	    }
 	}
 }
