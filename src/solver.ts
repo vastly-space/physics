@@ -484,7 +484,6 @@ function groundCheck (sourceBody: DynamicBody, staticOctree: Octree, statics: Ma
 		}
 
 		sourceBody.position = pos;
-		console.log(`POS AFTER SNAP ${pos.x} ${pos.y} ${pos.z}`)
 	}
 }
 

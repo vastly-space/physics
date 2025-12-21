@@ -67,9 +67,34 @@ export class Controller {
 		this.updateSpeed();
 	}
 
+	private getRotationAngle () {
+		let result = 0;
+
+		let fm = Number(this._state.forward) - Number(this._state.backward);
+		let lm = Number(this._state.left) - Number(this._state.right);
+
+		if (fm != 0) {
+			if (fm < 0) {
+				result -= 180;
+				if (lm != 0) result -= 45 * lm;
+			} else {
+				if (lm != 0) result += 45 * lm;
+			}
+		} else {
+			if (lm != 0) result += 90 * lm;
+		}
+
+		return result;
+	}
+
 	updateSpeed () {
 		if (this._state.forward || this._state.backward || this._state.left || this._state.right) {
-	    	getVelocityFromDir(this._direction, this._pitchAngle, GLOBAL_SPEED * this._speedMultiplier, this._body.controllerVelocity);
+			let dir = {
+				direction: this._direction,
+				rotationAngle: this.getRotationAngle()
+			}
+
+	    	getVelocityFromDir(dir, this._pitchAngle, GLOBAL_SPEED * this._speedMultiplier, this._body.controllerVelocity);
 	    } else {
 	    	this._body.controllerVelocity.set(0,0,0);
 	    }

@@ -14,13 +14,18 @@ for (let ang = 0; ang < DEG; ang++) {
 }
 
 for (let ang = 0; ang < DEG; ang++) {
-    const dx = COS[ang];
-    const dz = SIN[ang];
+    const dz = COS[ang];
+    const dx = SIN[ang];
 
     dirXZ[ang] = new Vector3(dx, 0, dz);
 }
 
-export function snapVecToDir (vx: number, vz: number): number {
+export interface Direction {
+    direction: number;
+    rotationAngle: number;
+}
+
+export function snapVecToDir (vx: number, vy: number, vz: number): number {
 	const len = Math.hypot(vx, vz);
     if (len > 0) {
         vx /= len;
@@ -33,16 +38,21 @@ export function snapVecToDir (vx: number, vz: number): number {
     return Math.round(angle) % DEG;
 }
 
-export function getVelocityFromDir (index: number, pitchAngle: number, speed: number, out: Vector3) {
+export function getVelocityFromDir (dir: Direction, pitchAngle: number, speed: number, out: Vector3) {
+    let index = dir.direction + dir.rotationAngle;
+
+    if (index < 0) index += DEG;
+    if (index >= DEG) index -= DEG;
+
 	const dx = dirXZ[index].x;
     const dz = dirXZ[index].z;
 
     const sinP = SIN[pitchAngle + 90];
     const cosP = COS[pitchAngle + 90];
 
-    const nx = (dx * cosP) / SCALE;
-    const nz = (dz * cosP) / SCALE;
-    const ny = sinP;
+    const nx = (dx * sinP) / SCALE;
+    const nz = (dz * sinP) / SCALE;
+    const ny = cosP;
 
     out.x = ((nx * speed) / SCALE) | 0;
     out.y = ((ny * speed) / SCALE) | 0;
