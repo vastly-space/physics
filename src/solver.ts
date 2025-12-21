@@ -11,7 +11,7 @@ import type { Collision } from "./physics/sat.js"
 import { divTrunc } from "./math/utils.js"
 import { VecPool, AABBPool } from "./utils/pool.js"
 import Trimesh from "./physics/shapes/trimesh.js"
-import { MAX_DEPENETRATION_ITERATIONS, STEP_UP_HEIGHT, TICKRATE, GROUND_PROBE } from "./constants.js"
+import { MAX_DEPENETRATION_ITERATIONS, STEP_UP_HEIGHT, TICKRATE, GROUND_PROBE, MAX_SLOPE } from "./constants.js"
 
 const COS_60 = -0.5;
 
@@ -418,6 +418,11 @@ function groundCheck (sourceBody: DynamicBody, staticOctree: Octree, statics: Ma
 	const groundProbe = VecPool.alloc();
 	groundProbe.y -= GROUND_PROBE;
 
+	let bestGround: number = -1;
+	let bestGroundT: number = -1;
+	let bestGroundNormal: Vector3 | null = null;
+	let bestGroundDepth: number = 0;
+
 	for (const candidate of candidates) {
 		if (candidate.triangleIndex !== undefined) {
 			for (const shape of sourceBody.shapes) {
@@ -428,9 +433,13 @@ function groundCheck (sourceBody: DynamicBody, staticOctree: Octree, statics: Ma
 					Vector3.Zero
 				);
 
-				if (result !== null && result.normal.y > sourceBody.groundNormal.y) {
-					sourceBody.supportedBy = candidate.body.id;
-					sourceBody.groundNormal = result.normal;
+				if (result !== null && result.normal.y >= MAX_SLOPE) {
+					if (bestGround === -1 || bestGroundT > result.tEnter || bestGroundDepth < result.depth) {
+						bestGround = candidate.body.id;
+						bestGroundT = result.tEnter;
+						bestGroundNormal = result.normal;
+						bestGroundDepth = result.depth;
+					}
 				}
 			}
 		} else {
@@ -443,13 +452,39 @@ function groundCheck (sourceBody: DynamicBody, staticOctree: Octree, statics: Ma
 						Vector3.Zero
 					);
 
-					if (result !== null && result.normal.y > sourceBody.groundNormal.y) {
-						sourceBody.supportedBy = candidate.body.id;
-						sourceBody.groundNormal = result.normal;
+					if (result !== null && result.normal.y >= MAX_SLOPE) {
+						if (bestGround === -1 || bestGroundT > result.tEnter || bestGroundDepth < result.depth) {
+							bestGround = candidate.body.id;
+							bestGroundT = result.tEnter;
+							bestGroundNormal = result.normal;
+							bestGroundDepth = result.depth;
+						}
 					}
 				}
 			}
 		}
+	}
+
+	if (bestGround !== -1) {
+		sourceBody.supportedBy = bestGround;
+		sourceBody.groundNormal = bestGroundNormal as Vector3;
+		// snap to ground
+		const pos = VecPool.alloc().copy(sourceBody.position);
+
+		if (bestGroundDepth === 0) {
+			if (bestGroundT > 0) {
+				// glue to surface
+				const snapVec = VecPool.alloc().copy(Vector3.YAxis).scale(GROUND_PROBE * bestGroundT).neg();
+				pos.add(snapVec);
+			}
+		} else {
+			const yDot = (bestGroundNormal as Vector3).dot(Vector3.YAxis);
+			const snapVec = VecPool.alloc().copy(Vector3.YAxis).scale(GROUND_PROBE - yDot).neg();
+			pos.add(snapVec);
+		}
+
+		sourceBody.position = pos;
+		console.log(`POS AFTER SNAP ${pos.x} ${pos.y} ${pos.z}`)
 	}
 }
 
