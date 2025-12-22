@@ -44,7 +44,7 @@ export default class KinematicBody extends StaticBody {
 
 		this._motionDelta.copy(this._scriptPos).sub(this._prevPos);
 
-		this._sweptAABB.copy(this._aabb).expand(this._motionDelta);
+		this._sweptAABB.copy(this._aabb).sweep(this._motionDelta);
 	}
 
 	postStep (tick: number) {

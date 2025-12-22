@@ -117,7 +117,7 @@ export default class DynamicBody extends KinematicBody {
 		} else {
 			const tickV = this.velocity.scale(TICKRATE/1000);
 
-			this._sweptAABB.copy(this._aabb).expand(tickV);
+			this._sweptAABB.copy(this._aabb).sweep(tickV);
 		}
 	}
 

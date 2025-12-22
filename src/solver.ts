@@ -91,7 +91,7 @@ function depenetrationPhase (sourceBody: DynamicBody, candidates: CollisionCandi
 	do {
 		hasPenetration = false;
 		let biggestPenetration: Vector3 | null = null;
-		let biggestPenetrationDepth: number = -Infinity;
+		let biggestPenetrationDepth: number = 0;
 
 		for (const candidate of candidates) {
 			for (const shape of sourceBody.shapes) {
@@ -116,7 +116,7 @@ function depenetrationPhase (sourceBody: DynamicBody, candidates: CollisionCandi
 							Vector3.Zero
 						);
 
-						if (res !== null && res.depth >= 2 && res.depth > biggestPenetrationDepth) {
+						if (res !== null && res.depth > biggestPenetrationDepth && res.depth > 5) {
 							hasPenetration = true;
 							biggestPenetration = VecPool.alloc().copy(res.normal).scale(res.depth)
 						}
@@ -254,6 +254,8 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 			}
 		}
 
+		let clipped = false;
+
 		if (realCollisions.length === 0) {
 			sourcePosition.add(sourceVelocity);
 			break;
@@ -283,18 +285,32 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 				}
 			}
 
+			// sort out orthogonal collisions
+			while (realCollisions[0] !== undefined && sourceVelocity.dot(realCollisions[0].collision.normal) === 0) {
+				const c = realCollisions.shift() as { candidate: CollisionCandidate, collision: Collision };
+				result.push({
+					body1: sourceBody,
+					body2: c.candidate.body,
+					normal: c.collision.normal,
+					exitFlag: true
+				});
+			}
+
 			if (realCollisions.length === 0 || sourceBody.kinematicBehavior) {
 				sourcePosition.add(sourceVelocity);
 				break;
 			} else {
 				// move to tEnter
-				sourcePosition.addScaled(sourceVelocity, realCollisions[0].collision.tEnter);
-				// clip speed by normal
-				const vn = sourceVelocity.dot(realCollisions[0].collision.normal);
-				if (vn < 0) {
-					sourceVelocity.addScaled(realCollisions[0].collision.normal, -vn);
+				const moveDelta = VecPool.alloc().copy(sourceVelocity).scale(realCollisions[0].collision.tEnter);
+				if (!moveDelta.isZero()) {
+					sourcePosition.add(moveDelta);
+					// clip speed by normal
+					const vn = sourceVelocity.dot(realCollisions[0].collision.normal);
+					if (vn < 0) {
+						sourceVelocity.addScaled(realCollisions[0].collision.normal, -vn);
+						clipped = true;
+					}
 				}
-
 				result.push({
 					body1: sourceBody,
 					body2: realCollisions[0].candidate.body,
@@ -303,6 +319,8 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 				});
 			}
 		}
+
+		if (!clipped) break;
 	}
 
 	return {

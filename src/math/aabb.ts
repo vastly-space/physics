@@ -124,6 +124,12 @@ export default class AABB {
 	    return this;
 	}
 
+	sweep (vec: Vector3) {
+		this.sweepX(vec.x);
+		this.sweepY(vec.y);
+		this.sweepZ(vec.z);
+	}
+
 	copy (other: AABB): AABB {
 		this._min.copy(other.min);
 		this._max.copy(other.max);

@@ -99,24 +99,19 @@ export default class StaticBody {
 
 			switch (shape.type) {
 				case "box":
+				case "sphere":
+				case "cylinder":
+					const aabb = shape.aabb.clone();
+					aabb.translate(this._position);
+
 					item = {
 						id: this._id,
 						body: this,
 						shapeIndex: index,
-						aabb: shape.aabb,
+						aabb: aabb,
 						layer: this._layer
 					}
 					tree.insert(item);
-					break;
-				case "sphere":
-					item = {
-						id: this._id,
-						body: this,
-						shapeIndex: index,
-						aabb: shape.aabb,
-						layer: this._layer
-					}
-					tree.insert(item)
 					break;
 				case "trimesh":
 					if (this.kind !== "static") {

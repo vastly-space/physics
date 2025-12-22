@@ -193,7 +193,7 @@ export class SAT {
 
 		ca.y = 0;
 		cb.y = 0;
-		result.push(cb.sub(ca));
+		result.push(ca.sub(cb));
 
 		return result;
 	}
