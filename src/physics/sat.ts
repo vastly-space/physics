@@ -139,18 +139,9 @@ export class SAT {
 			)	
 		];
 
-		const s = a.shape as Sphere;
-		const c = b.shape as Cylinder;
-
-		const dist = sc.dot(result[0]);
-		const closestOnY = VecPool.alloc().copy(result[0]);
-		closestOnY.x *= dist;
-		closestOnY.y *= dist;
-		closestOnY.z *= dist;
-		const secondAxis = sc.sub(closestOnY);
-
-		result.push(secondAxis);
-		result.push(VecPool.alloc().copy(result[0]).cross(secondAxis));
+		sc.y = 0;
+		cc.y = 0;
+		result.push(VecPool.alloc().copy(sc).sub(cc));
 
 		return result;
 	}
