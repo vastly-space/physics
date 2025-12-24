@@ -9,6 +9,8 @@ import Cylinder from "./shapes/cylinder.js"
 import Triangle from "./shapes/triangle.js"
 
 export interface Collision {
+	shape1: ShapeWrapper;
+	shape2: ShapeWrapper;
 	normal: Vector3;
 	tEnter: number;
 	tExit: number;
@@ -230,7 +232,7 @@ export class SAT {
 		return result;
 	}
 
-	static collect_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static collect_axes (a: ShapeWrapper, b: ShapeWrapper, clearY: boolean = false): Vector3[] {
 		let result: Vector3[];
 
 		switch (a.shape.type) {
@@ -295,6 +297,12 @@ export class SAT {
 				throw new Error("Unknown shape type: " + a.shape.type);
 		}
 
+		if (clearY) {
+			for (let i=0; i<result.length; i++) {
+				result[i].y = 0;
+			}
+		}
+
 		// remove zero-length axes
 		result = result.filter(a => !a.isZero());
 
@@ -304,10 +312,10 @@ export class SAT {
 		return result;
 	}
 
-	static test (a: ShapeWrapper, b: ShapeWrapper, avel: Vector3, bvel: Vector3): Collision | null {
+	static test (a: ShapeWrapper, b: ShapeWrapper, avel: Vector3, bvel: Vector3, clearY: boolean = false): Collision | null {
 		const vel = VecPool.alloc().copy(avel).sub(bvel);
 
-		const testAxes = SAT.collect_axes(a, b);
+		const testAxes = SAT.collect_axes(a, b, clearY);
 
 		let tEnter: number = -Infinity;
 		let tExit: number = Infinity;
@@ -346,6 +354,8 @@ export class SAT {
 		if (bestAxisIndex === -1) return null;
 
 		return {
+			shape1: a,
+			shape2: b,
 			normal: testAxes[bestAxisIndex],
 			tEnter: tEnter,
 			tExit: tExit,

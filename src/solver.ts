@@ -13,7 +13,8 @@ import { VecPool, AABBPool } from "./utils/pool.js"
 import Trimesh from "./physics/shapes/trimesh.js"
 import { MAX_DEPENETRATION_ITERATIONS, STEP_UP_HEIGHT, TICKRATE, GROUND_PROBE, MAX_SLOPE } from "./constants.js"
 
-const COS_60 = -0.5;
+const FLOOR_COS = 0.5;
+const CEILING_COS = -0.8;
 
 interface CollisionCandidate {
 	body: StaticBody | KinematicBody | DynamicBody;
@@ -33,6 +34,8 @@ interface SolveResult {
 	locked: boolean;
 	events: CollisionEvent[]; 
 }
+
+type FormattedCollision = { type: 'trigger' | 'ground' | 'xz' | 'ceiling'; candidate: CollisionCandidate; collision: Collision };
 
 function broadphase (dynamicId: number, staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): CollisionCandidate[] {
 	const result: CollisionCandidate[] = [];
@@ -81,105 +84,158 @@ function broadphase (dynamicId: number, staticOctree: Octree, statics: Map<numbe
 	return result;
 }
 
+function gatherCollisions (sourceBody: DynamicBody, sourcePosition: Vector3, candidate: CollisionCandidate, sourceVelocity: Vector3, candidateVelocity: Vector3, clearY: boolean): FormattedCollision[] {
+	const collisions: Collision[] = [];
+
+	if (candidate.triangleIndex !== undefined) {
+		for (const shape of sourceBody.shapes) {
+			const res = SAT.test(
+				{ parentOffset: sourcePosition, shape: shape },
+				{ parentOffset: candidate.body.position, shape: (candidate.shape as Trimesh).triangles[candidate.triangleIndex] },
+				sourceVelocity,
+				candidateVelocity,
+				clearY
+			);
+
+			if (res !== null) collisions.push(res);
+		}
+	} else {
+		for (const shape of sourceBody.shapes) {
+			for (const cShape of candidate.body.shapes) {
+				const res = SAT.test(
+					{ parentOffset: sourcePosition, shape: shape },
+					{ parentOffset: candidate.body.position, shape: cShape },
+					sourceVelocity,
+					candidateVelocity,
+					clearY
+				);
+
+				if (res !== null) collisions.push(res);
+			}
+		}
+	}
+
+	if (candidate.body.isTrigger) {
+		return collisions.map(collision => {
+			return {
+				type: "trigger",
+				candidate: candidate,
+				collision: collision
+			};
+		});
+	} else {
+		return collisions.map(collision => {
+			if (!sourceVelocity.isZero() && sourceVelocity.dot(collision.normal) === 0) return null;
+
+			if (collision.normal.y >= FLOOR_COS) {
+				return {
+					type: "ground",
+					candidate: candidate,
+					collision: collision
+				};
+			} else if (collision.normal.y <= CEILING_COS) {
+				return {
+					type: "ceiling",
+					candidate: candidate,
+					collision: collision
+				};
+			} else {
+				return {
+					type: "xz",
+					candidate: candidate,
+					collision: collision
+				};
+			}
+		}).filter(c => c !== null) as FormattedCollision[];
+	}
+}
+
 function depenetrationPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[], sourcePosition: Vector3): [boolean, CollisionEvent[]] {
-	let locked: boolean = false;
 	const depPos: Vector3 = VecPool.alloc().copy(sourcePosition);
 
 	let iterations = 0;
-	let hasPenetration = false;
 
-	do {
-		hasPenetration = false;
-		let biggestPenetration: Vector3 | null = null;
-		let biggestPenetrationDepth: number = 0;
+	while (iterations < MAX_DEPENETRATION_ITERATIONS) {
+		let totalCollisions: FormattedCollision[] = [];
 
+		// collect all including ground
 		for (const candidate of candidates) {
-			for (const shape of sourceBody.shapes) {
-				if (candidate.triangleIndex !== undefined) {
-					const res = SAT.test(
-						{ parentOffset: depPos, shape: shape },
-						{ parentOffset: candidate.body.position, shape: (candidate.shape as Trimesh).triangles[candidate.triangleIndex] },
-						Vector3.Zero,
-						Vector3.Zero
-					);
+			const tests = gatherCollisions(sourceBody, depPos, candidate, Vector3.Zero, Vector3.Zero, false).filter(c => {
+				return c.type !== "trigger" && c.collision.depth >= 2;
+			});
+			totalCollisions = totalCollisions.concat(tests);
+		}
 
-					if (res !== null && res.depth >= 2 && res.depth > biggestPenetrationDepth) {
-						hasPenetration = true;
-						biggestPenetration = VecPool.alloc().copy(res.normal).scale(res.depth)
-					}
-				} else {
-					for (const cShape of candidate.body.shapes) {
-						const res = SAT.test(
-							{ parentOffset: depPos, shape: shape },
-							{ parentOffset: candidate.body.position, shape: cShape },
-							Vector3.Zero,
-							Vector3.Zero
-						);
+		const groundContacts = totalCollisions.filter(c => c.type === "ground");
+		if (groundContacts.length > 0) {
+			let maxY = -Infinity;
+			for (const contact of groundContacts) {
+				maxY = Math.max(contact.collision.normal.y * contact.collision.depth, maxY);
+			}
 
-						if (res !== null && res.depth > biggestPenetrationDepth && res.depth > 5) {
-							hasPenetration = true;
-							biggestPenetration = VecPool.alloc().copy(res.normal).scale(res.depth)
-						}
-					}
+			depPos.y += maxY;
+			depPos.y | 0;
+			iterations++;
+			continue;
+		} else {
+			// collect contacts in XZ plane
+			const xzCandidates = totalCollisions.map(c => {
+				if (c.type === "ground") return null;
+
+				return c.candidate;
+			}).filter(c => c !== null);
+			
+			totalCollisions = [];
+
+			for (const candidate of xzCandidates) {
+				const tests = gatherCollisions(sourceBody, depPos, candidate, Vector3.Zero, Vector3.Zero, true).filter(c => {
+					return c.type !== "trigger" && c.collision.depth >= 2;
+				});
+				totalCollisions = totalCollisions.concat(tests);
+			}
+
+			if (totalCollisions.length === 0) {
+				break;
+			}
+
+			let maxDepth = -Infinity;
+			let maxVec: Vector3 | null = null;
+
+			for (const contact of totalCollisions) {
+				if (contact.collision.depth > maxDepth) {
+					maxDepth = contact.collision.depth;
+					maxVec = VecPool.alloc().copy(contact.collision.normal).scale(contact.collision.depth);
 				}
 			}
+
+			depPos.add(maxVec as Vector3);
+			iterations++;
 		}
+	}
 
-		// move out by biggest penetration
-		if (hasPenetration) {
-			depPos.add(biggestPenetration!);
-		}
+	// check if we still have penetrations
+	let totalCollisions: FormattedCollision[] = [];
 
-		iterations++;
-	} while (hasPenetration && iterations < MAX_DEPENETRATION_ITERATIONS);
+	// collect all including ground
+	for (const candidate of candidates) {
+		const tests = gatherCollisions(sourceBody, depPos, candidate, Vector3.Zero, Vector3.Zero, false);
+		totalCollisions = totalCollisions.concat(tests);
+	}
 
-	if (hasPenetration) {
-		let events: CollisionEvent[] = [];
+	const finalCollisions = totalCollisions.filter(c => c.type !== "trigger" && c.collision.depth >= 2);
 
-		for (const candidate of candidates) {
-			for (const shape of sourceBody.shapes) {
-				if (candidate.triangleIndex !== undefined) {
-					const res = SAT.test(
-						{ parentOffset: sourcePosition, shape: shape },
-						{ parentOffset: candidate.body.position, shape: (candidate.shape as Trimesh).triangles[candidate.triangleIndex] },
-						Vector3.Zero,
-						Vector3.Zero
-					);
+	sourcePosition.copy(depPos);
 
-					if (res !== null) {
-						events.push({
-							body1: sourceBody,
-							body2: candidate.body,
-							normal: res.normal,
-							exitFlag: false
-						});
-					}
-				} else {
-					for (const cShape of candidate.body.shapes) {
-						const res = SAT.test(
-							{ parentOffset: sourcePosition, shape: shape },
-							{ parentOffset: candidate.body.position, shape: cShape },
-							Vector3.Zero,
-							Vector3.Zero
-						);
-
-						if (res !== null) {
-							events.push({
-								body1: sourceBody,
-								body2: candidate.body,
-								normal: res.normal,
-								exitFlag: false
-							});
-						}
-					}
-				}
+	if (finalCollisions.length > 0) {
+		return [true, finalCollisions.map(c => {
+			return {
+				body1: sourceBody,
+				body2: c.candidate.body,
+				normal: c.collision.normal,
+				exitFlag: false
 			}
-		}
-
-		return [true, events];
+		})]
 	} else {
-		sourcePosition.copy(depPos);
-
 		return [false, []];
 	}
 }
@@ -208,119 +264,128 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 		NARROWPHASE
 	*/
 	while (sourceVelocity.lengthSquared() >= 100) {
-		let realCollisions: { candidate: CollisionCandidate, collision: Collision }[] = [];
+		let intersections: FormattedCollision[] = [];
 
 		for (const candidate of candidates) {
-			for (const shape of sourceBody.shapes) {
-				if (candidate.triangleIndex) {
-					// test agains triangle
-					const collision = SAT.test(
-						{ parentOffset: sourcePosition, shape: shape },
-						{ parentOffset: candidate.body.position, shape: (candidate.shape as Trimesh).triangles[candidate.triangleIndex] },
-						sourceVelocity,
-						Vector3.Zero
-					);
+			let cVel: Vector3 = Vector3.Zero;
 
-					if (collision !== null) realCollisions.push({
-						candidate,
-						collision
-					});
-				} else {
-					let cVel: Vector3 = Vector3.Zero;
-
-					switch (candidate.body.kind) {
-						case "kinematic":
-							cVel = (candidate.body as KinematicBody).motionDelta;
-							break;
-						case "dynamic":
-							cVel = (candidate.body as DynamicBody).velocity;
-							break;
-					}
-
-					for (const cShape of candidate.body.shapes) {
-						const collision = SAT.test(
-							{ parentOffset: sourcePosition, shape: shape },
-							{ parentOffset: candidate.body.position, shape: cShape },
-							sourceVelocity,
-							cVel
-						);
-
-						if (collision !== null) realCollisions.push({
-							candidate,
-							collision
-						});
-					}
-				}
+			switch (candidate.body.kind) {
+				case "kinematic":
+					cVel = (candidate.body as KinematicBody).motionDelta;
+					break;
+				case "dynamic":
+					cVel = (candidate.body as DynamicBody).velocity;
+					break;
 			}
+
+			const tests = gatherCollisions(sourceBody, sourcePosition, candidate, sourceVelocity, cVel, false);
+			intersections = intersections.concat(tests);
 		}
 
-		let clipped = false;
+		intersections.sort((a, b) => a.collision.tEnter - b.collision.tEnter);
 
-		if (realCollisions.length === 0) {
-			sourcePosition.add(sourceVelocity);
-			break;
-		} else {
-			// sort out by time
-			realCollisions.sort((a, b) => a.collision.tEnter - b.collision.tEnter);
-			// skip all trigger bodies events
-			while (realCollisions[0] !== undefined && realCollisions[0].candidate.body.isTrigger) {
-				const c = realCollisions.shift() as { candidate: CollisionCandidate, collision: Collision };
+		const groundContacts = intersections.filter(c => c.type === "ground");
+		if (groundContacts.length > 0) {
+			let maxY = -Infinity;
+			let maxContactTEnter = -Infinity;
 
-				if (c.collision.tEnter >= 0) {
-					result.push({
-						body1: sourceBody,
-						body2: c.candidate.body,
-						normal: c.collision.normal,
-						exitFlag: false
-					});
-				}
+			for (const contact of groundContacts) {
+				let y = sourcePosition.y + sourceVelocity.y * contact.collision.tEnter;
 
-				if (c.collision.tExit <= 1) {
-					result.push({
-						body1: sourceBody,
-						body2: c.candidate.body,
-						normal: c.collision.normal,
-						exitFlag: true
-					});
+				if (y > maxY) {
+					maxY = y;
+					maxContactTEnter = contact.collision.tEnter;
 				}
 			}
 
-			// sort out orthogonal collisions
-			while (realCollisions[0] !== undefined && sourceVelocity.dot(realCollisions[0].collision.normal) === 0) {
-				const c = realCollisions.shift() as { candidate: CollisionCandidate, collision: Collision };
+			sourcePosition.y = maxY;
+			sourceVelocity.y = 0;
+
+			const triggerContacts = intersections.filter(c => c.type === "trigger" && c.collision.tEnter <= maxContactTEnter);
+			for (const contact of triggerContacts) {
 				result.push({
 					body1: sourceBody,
-					body2: c.candidate.body,
-					normal: c.collision.normal,
-					exitFlag: true
+					body2: contact.candidate.body,
+					normal: contact.collision.normal,
+					exitFlag: contact.collision.tExit <= 1
 				});
 			}
 
-			if (realCollisions.length === 0 || sourceBody.kinematicBehavior) {
-				sourcePosition.add(sourceVelocity);
+			continue;
+		}
+
+		const xzContacts = intersections.filter(c => c.type === "xz");
+		if (xzContacts.length > 0) {
+			const contact = xzContacts[0];
+
+			const triggerContacts = intersections.filter(c => c.type === "trigger" && c.collision.tEnter <= contact.collision.tEnter);
+			for (const contact of triggerContacts) {
+				result.push({
+					body1: sourceBody,
+					body2: contact.candidate.body,
+					normal: contact.collision.normal,
+					exitFlag: contact.collision.tExit <= 1
+				});
+			}
+
+			const moveDelta = VecPool.alloc().copy(sourceVelocity).scale(contact.collision.tEnter);
+			if (moveDelta.isZero()) {
 				break;
 			} else {
-				// move to tEnter
-				const moveDelta = VecPool.alloc().copy(sourceVelocity).scale(realCollisions[0].collision.tEnter);
-				if (!moveDelta.isZero()) {
-					sourcePosition.add(moveDelta);
-					// clip speed by normal
-					const vn = sourceVelocity.dot(realCollisions[0].collision.normal);
-					if (vn < 0) {
-						sourceVelocity.addScaled(realCollisions[0].collision.normal, -vn);
-						clipped = true;
-					}
+				sourcePosition.add(moveDelta);
+
+				const vn = sourceVelocity.dot(contact.collision.normal);
+				if (vn < 0) {
+					sourceVelocity.addScaled(contact.collision.normal, -vn);
+					continue;
 				}
-				result.push({
-					body1: sourceBody,
-					body2: realCollisions[0].candidate.body,
-					normal: realCollisions[0].collision.normal,
-					exitFlag: true
-				});
 			}
 		}
 
-		if (!clipped) break;
+		const ceilingContacts = intersections.filter(c => c.type === "ceiling");
+		if (ceilingContacts.length > 0) {
+			let minY = -Infinity;
+			let minContactTEnter = -Infinity;
+
+			for (const contact of ceilingContacts) {
+				let y = sourcePosition.y + sourceVelocity.y * contact.collision.tEnter;
+
+				if (y < minY) {
+					minY = y;
+					minContactTEnter = contact.collision.tEnter;
+				}
+			}
+
+			sourcePosition.y = minY;
+			sourceVelocity.y = 0;
+
+			const triggerContacts = intersections.filter(c => c.type === "trigger" && c.collision.tEnter <= minContactTEnter);
+			for (const contact of triggerContacts) {
+				result.push({
+					body1: sourceBody,
+					body2: contact.candidate.body,
+					normal: contact.collision.normal,
+					exitFlag: contact.collision.tExit <= 1
+				});
+			}
+
+			continue;
+		}
+
+		if (sourceVelocity.lengthSquared() >= 100) {
+			const triggerContacts = intersections.filter(c => c.type === "trigger");
+			for (const contact of triggerContacts) {
+				result.push({
+					body1: sourceBody,
+					body2: contact.candidate.body,
+					normal: contact.collision.normal,
+					exitFlag: contact.collision.tExit <= 1
+				});
+			}
+
+			sourcePosition.add(sourceVelocity);
+			break;
+		}
 	}
 
 	return {
@@ -351,7 +416,7 @@ function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<numb
 			for (const event of result.events) {
 				if (event.body2.isTrigger) continue;
 
-				if (event.normal.dot(velocity) >= COS_60) continue;
+				if (event.normal.dot(velocity) >= FLOOR_COS) continue;
 
 				needStepUp = true;
 				break;
