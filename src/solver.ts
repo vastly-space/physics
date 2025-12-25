@@ -329,16 +329,18 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 			}
 
 			const moveDelta = VecPool.alloc().copy(sourceVelocity).scale(contact.collision.tEnter);
-			if (moveDelta.isZero()) {
-				break;
-			} else {
-				sourcePosition.add(moveDelta);
+			sourcePosition.add(moveDelta);
 
-				const vn = sourceVelocity.dot(contact.collision.normal);
-				if (vn < 0) {
-					sourceVelocity.addScaled(contact.collision.normal, -vn);
-					continue;
-				}
+			const vn = sourceVelocity.dot(contact.collision.normal);
+			if (vn < 0) {
+				sourceVelocity.x += contact.collision.normal.x * (-vn);
+				sourceVelocity.y += contact.collision.normal.y * (-vn);
+				sourceVelocity.z += contact.collision.normal.z * (-vn);
+				sourceVelocity.x |= 0;
+				sourceVelocity.y |= 0;
+				sourceVelocity.z |= 0;
+				// sourceVelocity.addScaled(contact.collision.normal, -vn);
+				continue;
 			}
 		}
 
