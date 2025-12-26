@@ -5,17 +5,19 @@ import type Shape from "../shape.js"
 
 import { VecPool } from "../../utils/pool.js"
 
-export default class Cylinder implements Shape {
-	public readonly type: string = "cylinder";
+export default class Capsule implements Shape {
+	public readonly type: string = "capsule";
 	public readonly offset: Vector3;
 	public readonly aabb: AABB;
 	public readonly height: number;
 	public readonly radius: number;
+	public readonly halfSegmentLength: number;
 
 	constructor (offset: Vector3, height: number, radius: number) {
 		this.offset = offset;
 		this.height = height;
 		this.radius = radius;
+		this.halfSegmentLength = (this.height - 2 * this.radius) / 2;
 
 		const hh = divTrunc(this.height, 2);
 
@@ -28,15 +30,13 @@ export default class Cylinder implements Shape {
 	}
 
 	projectOnAxis (parentOffset: Vector3, axis: Vector3): [number, number] {
-		const center = (VecPool.alloc().copy(this.offset).add(parentOffset)).dot(axis);
-		const axisDot = axis.y;
-		const heightExtent = (this.height * 0.5) * Math.abs(axisDot);
-		const radialExtent = this.radius * Math.sqrt(1 - axisDot * axisDot);
-		const extent = heightExtent + radialExtent;
+		const center = VecPool.alloc().copy(parentOffset).add(this.offset);
+		const centerDot = center.dot(axis);
+		const yDot = axis.y * this.halfSegmentLength;
 
 		return [
-			center - extent,
-			center + extent
+			centerDot - Math.abs(yDot) - this.radius,
+			centerDot + Math.abs(yDot) + this.radius
 		];
 	}
 }

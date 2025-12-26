@@ -84,7 +84,7 @@ function broadphase (dynamicId: number, staticOctree: Octree, statics: Map<numbe
 	return result;
 }
 
-function gatherCollisions (sourceBody: DynamicBody, sourcePosition: Vector3, candidate: CollisionCandidate, sourceVelocity: Vector3, candidateVelocity: Vector3, clearY: boolean): FormattedCollision[] {
+function gatherCollisions (sourceBody: DynamicBody, sourcePosition: Vector3, candidate: CollisionCandidate, sourceVelocity: Vector3, candidateVelocity: Vector3): FormattedCollision[] {
 	const collisions: Collision[] = [];
 
 	if (candidate.triangleIndex !== undefined) {
@@ -93,8 +93,7 @@ function gatherCollisions (sourceBody: DynamicBody, sourcePosition: Vector3, can
 				{ parentOffset: sourcePosition, shape: shape },
 				{ parentOffset: candidate.body.position, shape: (candidate.shape as Trimesh).triangles[candidate.triangleIndex] },
 				sourceVelocity,
-				candidateVelocity,
-				clearY
+				candidateVelocity
 			);
 
 			if (res !== null) collisions.push(res);
@@ -106,8 +105,7 @@ function gatherCollisions (sourceBody: DynamicBody, sourcePosition: Vector3, can
 					{ parentOffset: sourcePosition, shape: shape },
 					{ parentOffset: candidate.body.position, shape: cShape },
 					sourceVelocity,
-					candidateVelocity,
-					clearY
+					candidateVelocity
 				);
 
 				if (res !== null) collisions.push(res);
@@ -160,11 +158,13 @@ function depenetrationPhase (sourceBody: DynamicBody, candidates: CollisionCandi
 
 		// collect all including ground
 		for (const candidate of candidates) {
-			const tests = gatherCollisions(sourceBody, depPos, candidate, Vector3.Zero, Vector3.Zero, false).filter(c => {
+			const tests = gatherCollisions(sourceBody, depPos, candidate, Vector3.Zero, Vector3.Zero).filter(c => {
 				return c.type !== "trigger" && c.collision.depth >= 2;
 			});
 			totalCollisions = totalCollisions.concat(tests);
 		}
+
+		if (totalCollisions.length === 0) break;
 
 		const groundContacts = totalCollisions.filter(c => c.type === "ground");
 		if (groundContacts.length > 0) {
@@ -179,36 +179,20 @@ function depenetrationPhase (sourceBody: DynamicBody, candidates: CollisionCandi
 			continue;
 		} else {
 			// collect contacts in XZ plane
-			const xzCandidates = totalCollisions.map(c => {
-				if (c.type === "ground") return null;
-
-				return c.candidate;
-			}).filter(c => c !== null);
-			
-			totalCollisions = [];
-
-			for (const candidate of xzCandidates) {
-				const tests = gatherCollisions(sourceBody, depPos, candidate, Vector3.Zero, Vector3.Zero, true).filter(c => {
-					return c.type !== "trigger" && c.collision.depth >= 2;
-				});
-				totalCollisions = totalCollisions.concat(tests);
-			}
-
-			if (totalCollisions.length === 0) {
-				break;
-			}
+			const xzContacts = totalCollisions.filter(c => c.type !== "ground");
 
 			let maxDepth = -Infinity;
 			let maxVec: Vector3 | null = null;
 
-			for (const contact of totalCollisions) {
+			for (const contact of xzContacts) {
 				if (contact.collision.depth > maxDepth) {
 					maxDepth = contact.collision.depth;
 					maxVec = VecPool.alloc().copy(contact.collision.normal).scale(contact.collision.depth);
 				}
 			}
 
-			depPos.add(maxVec as Vector3);
+			depPos.x += maxVec!.x;
+			depPos.z += maxVec!.z;
 			iterations++;
 		}
 	}
@@ -218,7 +202,7 @@ function depenetrationPhase (sourceBody: DynamicBody, candidates: CollisionCandi
 
 	// collect all including ground
 	for (const candidate of candidates) {
-		const tests = gatherCollisions(sourceBody, depPos, candidate, Vector3.Zero, Vector3.Zero, false);
+		const tests = gatherCollisions(sourceBody, depPos, candidate, Vector3.Zero, Vector3.Zero);
 		totalCollisions = totalCollisions.concat(tests);
 	}
 
@@ -278,7 +262,7 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 					break;
 			}
 
-			const tests = gatherCollisions(sourceBody, sourcePosition, candidate, sourceVelocity, cVel, false);
+			const tests = gatherCollisions(sourceBody, sourcePosition, candidate, sourceVelocity, cVel);
 			intersections = intersections.concat(tests);
 		}
 
@@ -334,12 +318,11 @@ function narrowPhase (sourceBody: DynamicBody, candidates: CollisionCandidate[],
 			const vn = sourceVelocity.dot(contact.collision.normal);
 			if (vn < 0) {
 				sourceVelocity.x += contact.collision.normal.x * (-vn);
-				sourceVelocity.y += contact.collision.normal.y * (-vn);
+				// sourceVelocity.y += contact.collision.normal.y * (-vn);
 				sourceVelocity.z += contact.collision.normal.z * (-vn);
 				sourceVelocity.x |= 0;
-				sourceVelocity.y |= 0;
+				// sourceVelocity.y |= 0;
 				sourceVelocity.z |= 0;
-				// sourceVelocity.addScaled(contact.collision.normal, -vn);
 				continue;
 			}
 		}

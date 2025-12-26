@@ -5,7 +5,7 @@ import { VecPool } from "../utils/pool.js"
 
 import Box from "./shapes/box.js"
 import Sphere from "./shapes/sphere.js"
-import Cylinder from "./shapes/cylinder.js"
+import Capsule from "./shapes/capsule.js"
 import Trimesh from "./shapes/trimesh.js"
 import Triangle from "./shapes/triangle.js"
 
@@ -46,8 +46,8 @@ export class Raycaster {
 			case "sphere":
 				rayTest = SAT.ray_sphere({ parentOffset: VecPool.alloc(), shape: baseShape }, from, to);
 				break;
-			case "cylinder":
-				rayTest = SAT.ray_cylinder({ parentOffset: VecPool.alloc(), shape: baseShape }, from, to);
+			case "capsule":
+				rayTest = SAT.ray_capsule({ parentOffset: VecPool.alloc(), shape: baseShape }, from, to);
 				break;
 			case "trimesh":
 				rayTest = SAT.ray_triangle({ parentOffset: VecPool.alloc(), shape: (baseShape as Trimesh).triangles[candidate.triangleIndex!]! }, from, to);
@@ -80,8 +80,8 @@ export class Raycaster {
 				case "sphere":
 					rayTest = SAT.ray_sphere({ parentOffset: body.position, shape: shape }, from, to);
 					break;
-				case "cylinder":
-					rayTest = SAT.ray_cylinder({ parentOffset: body.position, shape: shape }, from, to);
+				case "capsule":
+					rayTest = SAT.ray_capsule({ parentOffset: body.position, shape: shape }, from, to);
 					break;
 			}
 

@@ -5,12 +5,10 @@ import { VecPool, AABBPool } from "../utils/pool.js"
 
 import Box from "./shapes/box.js"
 import Sphere from "./shapes/sphere.js"
-import Cylinder from "./shapes/cylinder.js"
+import Capsule from "./shapes/capsule.js"
 import Triangle from "./shapes/triangle.js"
 
 export interface Collision {
-	shape1: ShapeWrapper;
-	shape2: ShapeWrapper;
 	normal: Vector3;
 	tEnter: number;
 	tExit: number;
@@ -87,7 +85,7 @@ export class SAT {
 		return SAT.basic_axes(a, b);
 	}
 
-	static box_cylinder_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static box_capsule_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		return SAT.basic_axes(a, b);
 	}
 
@@ -127,23 +125,13 @@ export class SAT {
 		]
 	}
 
-	static sphere_cylinder_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static sphere_capsule_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		const sc = VecPool.alloc().copy(a.shape.offset).add(a.parentOffset);
 		const cc = VecPool.alloc().copy(b.parentOffset).add(b.shape.offset);
 
-		const result: Vector3[] = [
-			VecPool.alloc().set(
-				0,
-				sc.y <= cc.y ? -1 : 1,
-				0
-			)	
-		];
-
-		sc.y = 0;
-		cc.y = 0;
-		result.push(VecPool.alloc().copy(sc).sub(cc));
-
-		return result;
+		return [
+			sc.sub(cc)
+		]
 	}
 
 	static sphere_triangle_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
@@ -172,26 +160,11 @@ export class SAT {
 		return result;
 	}
 
-	static cylinder_cylinder_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
-		const ca = VecPool.alloc().copy((a.shape as Cylinder).offset).add(a.parentOffset);
-		const cb = VecPool.alloc().copy((b.shape as Cylinder).offset).add(b.parentOffset);
-
-		const result: Vector3[] = [
-			VecPool.alloc().set(
-				0,
-				ca.y <= cb.y ? -1 : 1,
-				0
-			)
-		];
-
-		ca.y = 0;
-		cb.y = 0;
-		result.push(ca.sub(cb));
-
-		return result;
+	static capsule_capsule_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+		return SAT.basic_axes(a, b);
 	}
 
-	static cylinder_triangle_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
+	static capsule_triangle_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		const tc = VecPool.alloc().copy(b.shape.aabb.min).add(b.shape.aabb.max);
 		tc.x /= 2;
 		tc.y /= 2;
@@ -223,7 +196,7 @@ export class SAT {
 		return result;
 	}
 
-	static collect_axes (a: ShapeWrapper, b: ShapeWrapper, clearY: boolean = false): Vector3[] {
+	static collect_axes (a: ShapeWrapper, b: ShapeWrapper): Vector3[] {
 		let result: Vector3[];
 
 		switch (a.shape.type) {
@@ -235,8 +208,8 @@ export class SAT {
 					case "sphere":
 						result = SAT.box_sphere_axes(a, b);
 						break;
-					case "cylinder":
-						result = SAT.box_cylinder_axes(a, b);
+					case "capsule":
+						result = SAT.box_capsule_axes(a, b);
 						break;
 					case "triangle":
 						result = SAT.box_triangle_axes(a, b);
@@ -254,8 +227,8 @@ export class SAT {
 					case "sphere":
 						result = SAT.sphere_sphere_axes(a, b);
 						break;
-					case "cylinder":
-						result = SAT.sphere_cylinder_axes(a, b);
+					case "capsule":
+						result = SAT.sphere_capsule_axes(a, b);
 						break;
 					case "triangle":
 						result = SAT.sphere_triangle_axes(a, b);
@@ -264,21 +237,21 @@ export class SAT {
 						throw new Error("Unknown shape type: " + b.shape.type);
 				}
 				break;
-			case "cylinder":
+			case "capsule":
 				switch (b.shape.type) {
 					case "box":
-						result = SAT.box_cylinder_axes(b, a);
+						result = SAT.box_capsule_axes(b, a);
 						result = result.map(v => v.neg());
 						break;
 					case "sphere":
-						result = SAT.sphere_cylinder_axes(b, a);
+						result = SAT.sphere_capsule_axes(b, a);
 						result = result.map(v => v.neg());
 						break;
-					case "cylinder":
-						result = SAT.cylinder_cylinder_axes(a, b);
+					case "capsule":
+						result = SAT.capsule_capsule_axes(a, b);
 						break;
 					case "triangle":
-						result = SAT.cylinder_triangle_axes(a, b);
+						result = SAT.capsule_triangle_axes(a, b);
 						break;
 					default:
 						throw new Error("Unknown shape type: " + b.shape.type);
@@ -286,12 +259,6 @@ export class SAT {
 				break;
 			default:
 				throw new Error("Unknown shape type: " + a.shape.type);
-		}
-
-		if (clearY) {
-			for (let i=0; i<result.length; i++) {
-				result[i].y = 0;
-			}
 		}
 
 		// remove zero-length axes
@@ -303,10 +270,10 @@ export class SAT {
 		return result;
 	}
 
-	static test (a: ShapeWrapper, b: ShapeWrapper, avel: Vector3, bvel: Vector3, clearY: boolean = false): Collision | null {
+	static test (a: ShapeWrapper, b: ShapeWrapper, avel: Vector3, bvel: Vector3): Collision | null {
 		const vel = VecPool.alloc().copy(avel).sub(bvel);
 
-		const testAxes = SAT.collect_axes(a, b, clearY);
+		const testAxes = SAT.collect_axes(a, b);
 
 		let tEnter: number = -Infinity;
 		let tExit: number = Infinity;
@@ -345,8 +312,6 @@ export class SAT {
 		if (bestAxisIndex === -1) return null;
 
 		return {
-			shape1: a,
-			shape2: b,
 			normal: testAxes[bestAxisIndex],
 			tEnter: tEnter,
 			tExit: tExit,
@@ -510,105 +475,136 @@ export class SAT {
 		return { t, normal, hitPoint, distance };
 	}
 
-	static ray_cylinder (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
-		const dir = VecPool.alloc().copy(to).sub(from);
-		const center = VecPool.alloc().copy((shape.shape as Cylinder).offset).add(shape.parentOffset);
-		const height = (shape.shape as Cylinder).height;
-		const r = (shape.shape as Sphere).radius;
+	static ray_capsule (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
+		const capsule = (shape.shape as Capsule);
+		const radius = capsule.radius;
+		const sc = VecPool.alloc().copy(shape.parentOffset).add(capsule.offset);
+		const segA = VecPool.alloc().copy(sc);
+		segA.y -= capsule.halfSegmentLength;
+		const segB = VecPool.alloc().copy(sc);
+		segB.y += capsule.halfSegmentLength;
 
-		let bestT = Infinity;
-		let bestNormal: Vector3 | null = null;
+		/*
+			a - ray origin
+			u - ray direction
+			o - segment start
+			e - segment direction
+			t - delta over ray
+			s - delta over segment
 
-		// side intersections
+			ray = a + t*u
+			segment = o + s*e
 
-		const a = dir.x*dir.x + dir.z*dir.z;
-		if (a > 0) {
-			const b = 2 * (dir.x * (from.x - center.x) + dir.z * (from.z - center.z));
-			const c = (from.x - center.x)*(from.x - center.x) + (from.z - center.z)*(from.z - center.z) - r*r;
-			const D = b*b - 4*a*c;
+			solve for infinite first, then clamp if out of bounds. Closest point must be orthogonal to both
 
-			if (D < 0) return null;
+			(a - o + t*u - s*e) * u = 0
+			(a - o + t*u - s*e) * e = 0
 
-			const t1 = (-b - Math.sqrt(D)) / (2 * a);
-			const t2 = (-b + Math.sqrt(D)) / (2 * a);
+			au - ou + t*uu - s*ue = 0
+			ae - oe + t*ue - s*ee = 0
 
-			// check both sides intersections
+			t = (ou - au + s*ue)/uu
 
-			if (t1 >= 0 && t1 <= 1) {
-				const py = from.y + dir.y * t1;
+			ae - oe + ((ou - au + s*ue)/uu)*ue - s*ee = 0
+			(ou*ue - au*ue + s*ue*ue)/uu - s*ee = oe - ae
+			ou*ue - au*ue + s*ue*ue - s*ee*uu = oe*uu - ae*uu
+			s = (oe*uu - ae*uu - ou*ue + au*ue)/(ue*ue - ee*uu)
+		*/
 
-				if ((py >= center.y - height/2 || py <= center.y + height/2) &&
-					(t1 < bestT))
-				{
-					bestT = t1;
-					const hitX = from.x - center.x + dir.x * t1;
-                    const hitZ = from.z - center.z + dir.z * t1;
-                    bestNormal = VecPool.alloc().set(hitX, 0, hitZ).normalize();
+		const u = VecPool.alloc().copy(to).sub(from);
+		const uu = u.dot(u);
+		const e = VecPool.alloc().copy(segB).sub(segA);
+		const ee = e.dot(e);
+		const ue = u.dot(e);
+		const au = u.dot(from);
+		const ae = e.dot(from);
+		const ou = u.dot(segA);
+		const oe = e.dot(segA);
+
+		// check parallel
+		const det = uu * ee - ue * ue;
+
+		if (det < 1e-8) {
+			// parallel
+			const dx = sc.x - from.x;
+			const dz = sc.z - from.z;
+			const distXZ = Math.sqrt(dx*dx + dz*dz);
+
+			if (distXZ > radius) return null;
+
+			// bottom
+			if (to.y > segA.y - radius) {
+				const hitPoint = VecPool.alloc().set(
+					from.x,
+					segA.y - (to.y - (segA.y - radius)),
+					from.z
+				);
+				const rayDiff = VecPool.alloc().copy(hitPoint).sub(from);
+				const tHit = rayDiff.dot(u)/uu;
+
+				return {
+					t: tHit,
+					hitPoint: hitPoint,
+					normal: VecPool.alloc().copy(hitPoint).sub(segA),
+					distance: rayDiff.length()
 				}
 			}
 
-			if (t2 >= 0 && t2 <= 1) {
-				const py = from.y + dir.y * t2;
+			// top
+			if (to.y < segB.y + radius) {
+				const hitPoint = VecPool.alloc().set(
+					from.x,
+					segB.y + ((segB.y + radius) - to.y),
+					from.z
+				);
+				const rayDiff = VecPool.alloc().copy(hitPoint).sub(from);
+				const tHit = rayDiff.dot(u)/uu;
 
-				if ((py >= center.y - height/2 || py <= center.y + height/2) &&
-					(t2 < bestT))
-				{
-					bestT = t2;
-					const hitX = from.x - center.x + dir.x * t2;
-                    const hitZ = from.z - center.z + dir.z * t2;
-                    bestNormal = VecPool.alloc().set(hitX, 0, hitZ).normalize();
+				return {
+					t: tHit,
+					hitPoint: hitPoint,
+					normal: VecPool.alloc().copy(hitPoint).sub(segB),
+					distance: rayDiff.length()
 				}
 			}
-		}
 
-		// top cap intersection
-		if (dir.y !== 0) {
-			const t = (center.y + height/2 - from.y) / dir.y;
-	        if (t < 0 || t > 1) return null;
+			return null;
+		} else {
+			// not parallel
+			let s = (oe*uu - ae*uu - ou*ue + au*ue)/(ue*ue - ee*uu);
+			let t = (ou - au + s*ue)/uu;
 
-	        const px = from.x + dir.x * t;
-	        const pz = from.z + dir.z * t;
+			if (s < 0 || s > 1) {
+				s = Math.max(0, Math.min(s, 1));
+				t = (ou - au + s*ue)/uu;
+			} else if (t < 0 || t > 1) {
+				t = Math.max(0, Math.min(t, 1));
+				s = (ae - oe + t*ue)/ee;
+			}
 
-	        const dxCap = px - center.x;
-	        const dzCap = pz - center.z;
+			const pointOnRay = VecPool.alloc().copy(from);
+			pointOnRay.x += u.x * t;
+			pointOnRay.y += u.y * t;
+			pointOnRay.z += u.z * t;
+			const pointOnSegment = VecPool.alloc().copy(segA);
+			pointOnSegment.x += e.x * s;
+			pointOnSegment.y += e.y * s;
+			pointOnSegment.z += e.z * s;
+			const diff = VecPool.alloc().copy(pointOnRay).sub(pointOnSegment);
 
-	        if (dxCap*dxCap + dzCap*dzCap <= r*r) {
-	            if (t < bestT) {
-	                bestT = t;
-	                bestNormal = VecPool.alloc().copy(Vector3.YAxis);
-	            }
-	        }
-		}
+			if (diff.lengthSquared() > radius*radius) return null;
 
-		// bottom cap intersection
-		if (dir.y !== 0) {
-			const t = (center.y - height/2 - from.y) / dir.y;
-	        if (t < 0 || t > 1) return null;
+			const normal = diff.normalize();
+			const hitPoint = VecPool.alloc().copy(pointOnSegment).addScaled(diff, radius);
+			const rayDiff = VecPool.alloc().copy(hitPoint).sub(from);
+			const tHit = rayDiff.dot(u)/uu;
 
-	        const px = from.x + dir.x * t;
-	        const pz = from.z + dir.z * t;
-
-	        const dxCap = px - center.x;
-	        const dzCap = pz - center.z;
-
-	        if (dxCap*dxCap + dzCap*dzCap <= r*r) {
-	            if (t < bestT) {
-	                bestT = t;
-	                bestNormal = VecPool.alloc().copy(Vector3.YAxis).neg();
-	            }
-	        }
-		}
-
-		if (bestT === Infinity || bestNormal === null) return null;
-
-		const hitPoint = VecPool.alloc().copy(dir).scale(bestT).add(from);
-		const distance = VecPool.alloc().copy(hitPoint).sub(from).length() | 0;
-
-		return {
-			t: bestT,
-			normal: bestNormal,
-			hitPoint: hitPoint,
-			distance: distance
+			return {
+				t: tHit,
+				hitPoint: hitPoint,
+				normal: normal,
+				distance: rayDiff.length()
+			}
 		}
 	}
 

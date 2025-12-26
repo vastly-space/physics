@@ -100,7 +100,7 @@ export default class StaticBody {
 			switch (shape.type) {
 				case "box":
 				case "sphere":
-				case "cylinder":
+				case "capsule":
 					const aabb = shape.aabb.clone();
 					aabb.translate(this._position);
 

@@ -8,7 +8,7 @@ import KinematicBody from "./physics/kinematicBody.js"
 import DynamicBody from "./physics/dynamicBody.js"
 import Box from "./physics/shapes/box.js"
 import Sphere from "./physics/shapes/sphere.js"
-import Cylinder from "./physics/shapes/cylinder.js"
+import Capsule from "./physics/shapes/capsule.js"
 import Triangle from "./physics/shapes/triangle.js"
 import { SAT } from "./physics/sat.js"
 import Trimesh from "./physics/shapes/trimesh.js"
@@ -52,7 +52,7 @@ export {
 	DynamicBody,
 	Box,
 	Sphere,
-	Cylinder,
+	Capsule,
 	Triangle,
 	SAT,
 	Trimesh,
