@@ -10,7 +10,7 @@ import Box from "./physics/shapes/box.js"
 import Sphere from "./physics/shapes/sphere.js"
 import Capsule from "./physics/shapes/capsule.js"
 import Triangle from "./physics/shapes/triangle.js"
-import { SAT } from "./physics/sat.js"
+import { Tester } from "./physics/tester.js"
 import Trimesh from "./physics/shapes/trimesh.js"
 import { Controller } from "./controller/controller.js"
 import { snapVecToDir, getVelocityFromDir } from "./controller/directionsTable.js"
@@ -25,7 +25,7 @@ import type Shape from "./physics/shape.js"
 import type { OctItem } from "./math/octree.js"
 import type { ControllerState } from "./controller/controller.js"
 import type { TransformationKind, ActionData } from "./transformations/transformation.js"
-import type { ShapeWrapper, Collision } from "./physics/sat.js"
+import type { ShapeWrapper, Collision } from "./physics/tester.js"
 import type { CollisionEvent } from "./solver.js"
 
 export type {
@@ -54,7 +54,7 @@ export {
 	Sphere,
 	Capsule,
 	Triangle,
-	SAT,
+	Tester,
 	Trimesh,
 	Controller,
 	snapVecToDir,

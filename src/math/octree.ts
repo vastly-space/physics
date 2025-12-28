@@ -1,6 +1,6 @@
 import Vector3 from "./vector3.js"
 import AABB from "./aabb.js"
-import { SAT } from "../physics/sat.js"
+import { Tester } from "../physics/tester.js"
 import StaticBody from "../physics/staticBody.js"
 
 export interface OctItem {
@@ -70,7 +70,7 @@ export class OctNode {
 	}
 
 	queryRay(from: Vector3, to: Vector3, out: OctItem[], mask: number): OctItem[] {
-		if (SAT.ray_aabb(this._bounds, from, to) !== null) {
+		if (Tester.ray_aabb(this._bounds, from, to) !== null) {
 			if (this._children[0] === null) {
 				// leaf
 				for (const item of this._items) {

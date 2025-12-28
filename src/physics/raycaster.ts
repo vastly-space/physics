@@ -15,8 +15,8 @@ import StaticBody from "./staticBody.js"
 import KinematicBody from "./kinematicBody.js"
 import DynamicBody from "./dynamicBody.js"
 
-import { SAT } from "./sat.js"
-import type { RayTestResult } from "./sat.js"
+import { Tester } from "./tester.js"
+import type { RayTestResult } from "./tester.js"
 
 type Body = StaticBody | KinematicBody | DynamicBody;
 
@@ -41,16 +41,16 @@ export class Raycaster {
 
 		switch (baseShape.type) {
 			case "box":
-				rayTest = SAT.ray_box({ parentOffset: VecPool.alloc(), shape: baseShape }, from, to);
+				rayTest = Tester.ray_box({ parentOffset: VecPool.alloc(), shape: baseShape }, from, to);
 				break;
 			case "sphere":
-				rayTest = SAT.ray_sphere({ parentOffset: VecPool.alloc(), shape: baseShape }, from, to);
+				rayTest = Tester.ray_sphere({ parentOffset: VecPool.alloc(), shape: baseShape }, from, to);
 				break;
 			case "capsule":
-				rayTest = SAT.ray_capsule({ parentOffset: VecPool.alloc(), shape: baseShape }, from, to);
+				rayTest = Tester.ray_capsule({ parentOffset: VecPool.alloc(), shape: baseShape }, from, to);
 				break;
 			case "trimesh":
-				rayTest = SAT.ray_triangle({ parentOffset: VecPool.alloc(), shape: (baseShape as Trimesh).triangles[candidate.triangleIndex!]! }, from, to);
+				rayTest = Tester.ray_triangle({ parentOffset: VecPool.alloc(), shape: (baseShape as Trimesh).triangles[candidate.triangleIndex!]! }, from, to);
 				break;
 		}
 
@@ -75,13 +75,13 @@ export class Raycaster {
 			let rayTest: RayTestResult | null = null;
 			switch (shape.type) {
 				case "box":
-					rayTest = SAT.ray_box({ parentOffset: body.position, shape: shape }, from, to);
+					rayTest = Tester.ray_box({ parentOffset: body.position, shape: shape }, from, to);
 					break;
 				case "sphere":
-					rayTest = SAT.ray_sphere({ parentOffset: body.position, shape: shape }, from, to);
+					rayTest = Tester.ray_sphere({ parentOffset: body.position, shape: shape }, from, to);
 					break;
 				case "capsule":
-					rayTest = SAT.ray_capsule({ parentOffset: body.position, shape: shape }, from, to);
+					rayTest = Tester.ray_capsule({ parentOffset: body.position, shape: shape }, from, to);
 					break;
 			}
 
@@ -122,7 +122,7 @@ export class Raycaster {
 		for (const [id, kBody] of kinematics) {
 			if (mask !== 0 && kBody.layer !== 0 && ((mask & kBody.layer) === 0)) continue;
 
-			if (SAT.ray_aabb(kBody.aabb, from, to)) {
+			if (Tester.ray_aabb(kBody.aabb, from, to)) {
 				candidates.push({ body: kBody });
 			}
 		}
@@ -130,7 +130,7 @@ export class Raycaster {
 		for (const [id, dBody] of dynamics) {
 			if (mask !== 0 && dBody.layer !== 0 && ((mask & dBody.layer) === 0)) continue;
 
-			if (SAT.ray_aabb(dBody.aabb, from, to)) {
+			if (Tester.ray_aabb(dBody.aabb, from, to)) {
 				candidates.push({ body: dBody });
 			}
 		}
