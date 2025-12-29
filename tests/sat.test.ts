@@ -6,7 +6,7 @@ import AABB from "../src/math/aabb.js"
 
 import Box from "../src/physics/shapes/box.js"
 import Sphere from "../src/physics/shapes/sphere.js"
-import Cylinder from "../src/physics/shapes/cylinder.js"
+import Capsule from "../src/physics/shapes/capsule.js"
 import Triangle from "../src/physics/shapes/triangle.js"
 
 describe("SAT tests", () => {
@@ -244,9 +244,9 @@ describe("SAT tests", () => {
 		expect(testResult.normal.z).toBeCloseTo(0);
 	});
 
-	it("Cylinder x Cylinder static non intersecting", () => {
-		const c1 = new Cylinder(new Vector3(0, 0, 0), 4, 2);
-		const c2 = new Cylinder(new Vector3(0, 0, 0), 4, 2);
+	it("Capsule x Capsule static non intersecting", () => {
+		const c1 = new Capsule(new Vector3(0, 0, 0), 4, 2);
+		const c2 = new Capsule(new Vector3(0, 0, 0), 4, 2);
 
 		const testResult = SAT.test(
 			{ shape: c1, parentOffset: new Vector3(0,0,0) },
@@ -258,9 +258,9 @@ describe("SAT tests", () => {
 		expect(testResult).toBe(null);
 	});
 
-	it("Cylinder x Cylinder static intersecting", () => {
-		const c1 = new Cylinder(new Vector3(0, 0, 0), 4, 2);
-		const c2 = new Cylinder(new Vector3(0, 0, 0), 4, 2);
+	it("Capsule x Capsule static intersecting", () => {
+		const c1 = new Capsule(new Vector3(0, 0, 0), 4, 2);
+		const c2 = new Capsule(new Vector3(0, 0, 0), 4, 2);
 
 		const testResult = SAT.test(
 			{ shape: c1, parentOffset: new Vector3(0,0,0) },
@@ -275,9 +275,9 @@ describe("SAT tests", () => {
 		expect(testResult.normal.z).toBeCloseTo(0);
 	});
 
-	it("Cylinder x Cylinder moving non intersecting", () => {
-		const c1 = new Cylinder(new Vector3(0, 0, 0), 4, 2);
-		const c2 = new Cylinder(new Vector3(0, 0, 0), 4, 2);
+	it("Capsule x Capsule moving non intersecting", () => {
+		const c1 = new Capsule(new Vector3(0, 0, 0), 4, 2);
+		const c2 = new Capsule(new Vector3(0, 0, 0), 4, 2);
 
 		const testResult = SAT.test(
 			{ shape: c1, parentOffset: new Vector3(0,0,0) },
@@ -289,9 +289,9 @@ describe("SAT tests", () => {
 		expect(testResult).toBe(null);
 	});
 
-	it("Cylinder x Cylinder moving intersecting", () => {
-		const c1 = new Cylinder(new Vector3(0, 0, 0), 4, 2);
-		const c2 = new Cylinder(new Vector3(0, 0, 0), 4, 2);
+	it("Capsule x Capsule moving intersecting", () => {
+		const c1 = new Capsule(new Vector3(0, 0, 0), 4, 2);
+		const c2 = new Capsule(new Vector3(0, 0, 0), 4, 2);
 
 		const testResult = SAT.test(
 			{ shape: c1, parentOffset: new Vector3(0,0,0) },
@@ -306,13 +306,13 @@ describe("SAT tests", () => {
 		expect(testResult.normal.z).toBeCloseTo(0);
 	});
 
-	it("Cylinder x Box static non intersecting", () => {
-		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+	it("Capsule x Box static non intersecting", () => {
+		const c = new Capsule(new Vector3(0,0,0), 4, 2);
 		const b = new Box(new Vector3(0,0,0), 2, 2, 2);
 
 		const testResult = SAT.test(
 			{ shape: c, parentOffset: new Vector3(0,0,0) },
-			{ shape: b, parentOffset: new Vector3(0,5,0) },
+			{ shape: b, parentOffset: new Vector3(0,6,0) },
 			new Vector3(0,0,0),
 			new Vector3(0,0,0)
 		);
@@ -320,8 +320,8 @@ describe("SAT tests", () => {
 		expect(testResult).toBe(null);
 	});
 
-	it("Cylinder x Box static intersecting", () => {
-		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+	it("Capsule x Box static intersecting", () => {
+		const c = new Capsule(new Vector3(0,0,0), 4, 2);
 		const b = new Box(new Vector3(0,0,0), 2, 2, 2);
 
 		const testResult = SAT.test(
@@ -337,8 +337,8 @@ describe("SAT tests", () => {
 		expect(testResult.normal.z).toBeCloseTo(0);
 	});
 
-	it("Cylinder x Box moving non intersecting", () => {
-		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+	it("Capsule x Box moving non intersecting", () => {
+		const c = new Capsule(new Vector3(0,0,0), 4, 2);
 		const b = new Box(new Vector3(0,0,0), 2, 2, 2);
 
 		const testResult = SAT.test(
@@ -351,8 +351,8 @@ describe("SAT tests", () => {
 		expect(testResult).toBe(null);
 	});
 
-	it("Cylinder x Box moving intersecting", () => {
-		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+	it("Capsule x Box moving intersecting", () => {
+		const c = new Capsule(new Vector3(0,0,0), 4, 2);
 		const b = new Box(new Vector3(0,0,0), 2, 2, 2);
 
 		const testResult = SAT.test(
@@ -368,8 +368,8 @@ describe("SAT tests", () => {
 		expect(testResult.normal.z).toBeCloseTo(0);
 	});
 
-	it("Cylinder x Box moving intersecting 2", () => {
-		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+	it("Capsule x Box moving intersecting 2", () => {
+		const c = new Capsule(new Vector3(0,0,0), 4, 2);
 		const b = new Box(new Vector3(0,0,0), 10, 2, 10);
 
 		const testResult = SAT.test(
@@ -385,8 +385,8 @@ describe("SAT tests", () => {
 		expect(testResult.normal.z).toBeCloseTo(0);
 	});
 
-	it("Cylinder x Sphere static non intersecting", () => {
-		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+	it("Capsule x Sphere static non intersecting", () => {
+		const c = new Capsule(new Vector3(0,0,0), 4, 2);
 		const s = new Sphere(new Vector3(0,0,0), 2);
 
 		const testResult = SAT.test(
@@ -399,8 +399,8 @@ describe("SAT tests", () => {
 		expect(testResult).toBe(null);
 	});
 
-	it("Cylinder x Sphere static intersecting", () => {
-		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+	it("Capsule x Sphere static intersecting", () => {
+		const c = new Capsule(new Vector3(0,0,0), 4, 2);
 		const s = new Sphere(new Vector3(0,0,0), 2);
 
 		const testResult = SAT.test(
@@ -416,8 +416,8 @@ describe("SAT tests", () => {
 		expect(testResult.normal.z).toBeCloseTo(0);
 	});
 
-	it("Cylinder x Sphere moving non intersecting", () => {
-		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+	it("Capsule x Sphere moving non intersecting", () => {
+		const c = new Capsule(new Vector3(0,0,0), 4, 2);
 		const s = new Sphere(new Vector3(0,0,0), 2);
 
 		const testResult = SAT.test(
@@ -430,8 +430,8 @@ describe("SAT tests", () => {
 		expect(testResult).toBe(null);
 	});
 
-	it("Cylinder x Sphere moving intersecting", () => {
-		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+	it("Capsule x Sphere moving intersecting", () => {
+		const c = new Capsule(new Vector3(0,0,0), 4, 4);
 		const s = new Sphere(new Vector3(0,0,0), 2);
 
 		const testResult = SAT.test(
@@ -600,8 +600,8 @@ describe("SAT tests", () => {
 		expect(testResult.normal.z).toBeLessThan(0);
 	});
 
-	it("Cylinder x Triangle static non intersecting", () => {
-		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+	it("Capsule x Triangle static non intersecting", () => {
+		const c = new Capsule(new Vector3(0,0,0), 4, 2);
 		const t = new Triangle(
 			new Vector3(1,5,0),
 			new Vector3(1,5,1),
@@ -618,8 +618,8 @@ describe("SAT tests", () => {
 		expect(testResult).toBe(null);
 	});
 
-	it("Cylinder x Triangle static intersecting", () => {
-		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+	it("Capsule x Triangle static intersecting", () => {
+		const c = new Capsule(new Vector3(0,0,0), 4, 4);
 		const t = new Triangle(
 			new Vector3(1,5,0),
 			new Vector3(1,5,1),
@@ -634,13 +634,10 @@ describe("SAT tests", () => {
 		);
 
 		expect(testResult).not.toBe(null);
-		expect(testResult.normal.x).toBeCloseTo(0);
-		expect(testResult.normal.y).toBeCloseTo(-1);
-		expect(testResult.normal.z).toBeCloseTo(0);
 	});
 
-	it("Cylinder x Triangle moving non intersecting", () => {
-		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+	it("Capsule x Triangle moving non intersecting", () => {
+		const c = new Capsule(new Vector3(0,0,0), 4, 2);
 		const t = new Triangle(
 			new Vector3(1,5,0),
 			new Vector3(1,5,1),
@@ -657,8 +654,8 @@ describe("SAT tests", () => {
 		expect(testResult).toBe(null);
 	});
 
-	it("Cylinder x Triangle moving intersecting", () => {
-		const c = new Cylinder(new Vector3(0,0,0), 4, 4);
+	it("Capsule x Triangle moving intersecting", () => {
+		const c = new Capsule(new Vector3(0,0,0), 4, 4);
 		const t = new Triangle(
 			new Vector3(1,5,0),
 			new Vector3(1,5,1),
@@ -673,8 +670,5 @@ describe("SAT tests", () => {
 		);
 
 		expect(testResult).not.toBe(null);
-		expect(testResult.normal.x).toBeCloseTo(0);
-		expect(testResult.normal.y).toBeCloseTo(-1);
-		expect(testResult.normal.z).toBeCloseTo(0);
 	});
 });

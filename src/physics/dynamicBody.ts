@@ -14,6 +14,8 @@ export default class DynamicBody extends KinematicBody {
 	protected _kinematicBehavior: boolean = false;
 	protected _mask: number = 0;
 	protected _gravityMultiplier: number = 1;
+	protected _canStepUp: boolean = false;
+	protected _triggerIntersections: Set<number> = new Set();
 
 	get supportedBy (): number {
 		return this._supportedBy;
@@ -34,6 +36,14 @@ export default class DynamicBody extends KinematicBody {
 		this._groundNormal.copy(val);
 	}
 
+	get canStepUp (): boolean {
+		return this._canStepUp;
+	}
+
+	set canStepUp (val: boolean) {
+		this._canStepUp = val;
+	}
+
 	get controllerVelocity (): Vector3 {
 		return this._controllerVelocity;
 	}
@@ -48,6 +58,10 @@ export default class DynamicBody extends KinematicBody {
 
 	set environmentalVelocity (val: Vector3) {
 		this._environmentalVelocity.copy(val);
+	}
+
+	get triggerIntersections (): Set<number> {
+		return this._triggerIntersections;
 	}
 
 	get velocity (): Vector3 {

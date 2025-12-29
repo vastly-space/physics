@@ -27,7 +27,6 @@ export interface TickEvent {
 	type: TickEventNumeric;
 	body1: Body;
 	body2: Body;
-	normal: Vector3;
 }
 
 export class World {
@@ -145,35 +144,38 @@ export class World {
 
 			d.position = tickResult.desiredPosition;
 
+			const prevTriggers = new Set(d.triggerIntersections);
+			d.triggerIntersections.clear();
+
 			for (const ev of tickResult.events) {
-				if (ev.body2.isTrigger) {
-					if (ev.body2.triggerIntersections.has(ev.body1.id) && ev.exitFlag) {
-						ev.body2.triggerIntersections.delete(ev.body1.id);
-						ev.body1.triggerIntersections.delete(ev.body2.id);
-
-						tickEvents.push({
-							type: World.rTickEventTypes.triggerExit,
-							body1: ev.body1,
-							body2: ev.body2,
-							normal: ev.normal
-						});
-					} else if (!ev.body2.triggerIntersections.has(ev.body1.id) && !ev.exitFlag) {
-						ev.body2.triggerIntersections.add(ev.body1.id);
-						ev.body1.triggerIntersections.add(ev.body2.id);
-
+				if (ev.trigger) {
+					if (!prevTriggers.has(ev.body2.id)) {
 						tickEvents.push({
 							type: World.rTickEventTypes.triggerEnter,
 							body1: ev.body1,
-							body2: ev.body2,
-							normal: ev.normal
+							body2: ev.body2
 						});
+					} else {
+						prevTriggers.delete(ev.body2.id);
 					}
+					d.triggerIntersections.add(ev.body2.id);
 				} else {
 					tickEvents.push({
 						type: World.rTickEventTypes.collide,
 						body1: ev.body1,
-						body2: ev.body2,
-						normal: ev.normal
+						body2: ev.body2
+					});
+				}
+			}
+
+			for (const id of prevTriggers) {
+				const triggerBody = this.statics.get(id) || this.kinematics.get(id);
+
+				if (triggerBody !== undefined) {
+					tickEvents.push({
+						type: World.rTickEventTypes.triggerExit,
+						body1: d,
+						body2: triggerBody!
 					});
 				}
 			}
@@ -213,25 +215,9 @@ export class World {
 
 	deleteBody (id: number) {
 		if (this.kinematics.has(id)) {
-			const k = this.kinematics.get(id)!;
-			// clear trigger intersections
-			for (const tId of k.triggerIntersections) {
-				const tBody = this.dynamics.get(id);
-
-				tBody?.triggerIntersections.delete(id);
-			}
-
 			this.kinematics.delete(id);
 		}
 		if (this.dynamics.has(id)) {
-			const d = this.dynamics.get(id)!;
-			// clear trigger intersections
-			for (const tId of d.triggerIntersections) {
-				const tBody = this.kinematics.get(tId) || this.statics.get(tId);
-
-				tBody?.triggerIntersections.delete(id);
-			}
-
 			this.dynamics.delete(id);
 		}
 		this.controllers.delete(id);

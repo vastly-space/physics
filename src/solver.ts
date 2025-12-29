@@ -19,7 +19,6 @@ import Triangle from "./physics/shapes/triangle.js"
 
 import { MAX_DEPENETRATION_ITERATIONS, STEP_UP_HEIGHT, TICKRATE, GROUND_PROBE, MAX_SLOPE } from "./constants.js"
 
-const FLOOR_COS = 0.5;
 const CEILING_COS = -0.8;
 const SLOP = 5;
 
@@ -32,8 +31,13 @@ interface CollisionCandidate {
 interface CollisionEvent {
 	body1: DynamicBody;
 	body2: StaticBody | KinematicBody | DynamicBody;
-	normal: Vector3;
-	exitFlag: boolean;
+	trigger: boolean;
+}
+
+interface MovementResult {
+	desiredPosition: Vector3;
+	tryStepUp: boolean;
+	events: CollisionEvent[];
 }
 
 interface SolveResult {
@@ -101,7 +105,7 @@ function gatherIntersections (sourceBody: DynamicBody, sourcePosition: Vector3, 
 						candidate: candidate,
 						data: data
 					});
-				} else if (data.normal.y >= FLOOR_COS) {
+				} else if (data.normal.y >= MAX_SLOPE) {
 					intersections.push({
 						type: "ground",
 						candidate: candidate,
@@ -134,7 +138,7 @@ function gatherIntersections (sourceBody: DynamicBody, sourcePosition: Vector3, 
 							candidate: candidate,
 							data: data
 						});
-					} else if (data.normal.y >= FLOOR_COS) {
+					} else if (data.normal.y >= MAX_SLOPE) {
 						intersections.push({
 							type: "ground",
 							candidate: candidate,
@@ -161,8 +165,8 @@ function gatherIntersections (sourceBody: DynamicBody, sourcePosition: Vector3, 
 	return intersections;
 }
 
-function depenetrate (sourceBody: DynamicBody, resPosition: Vector3, candidates: CollisionCandidate[]): boolean {
-	if (candidates.length === 0) return false;
+function depenetrate (sourceBody: DynamicBody, resPosition: Vector3, candidates: CollisionCandidate[]): CollisionEvent[] | null {
+	if (candidates.length === 0) return null;
 
 	const depPos = VecPool.alloc().copy(resPosition);
 
@@ -225,16 +229,42 @@ function depenetrate (sourceBody: DynamicBody, resPosition: Vector3, candidates:
 		depPos.y | 0,
 		depPos.z | 0
 	);
-	return hasIntersection;
+
+	if (hasIntersection) {
+		let events: CollisionEvent[] = [];
+
+		let currentIntersections: FormattedIntersection[] = [];
+
+		for (const candidate of candidates) {
+			currentIntersections = currentIntersections.concat(gatherIntersections(sourceBody, resPosition, candidate));
+		}
+
+		for (const intersection of currentIntersections) {
+			events.push({
+				body1: sourceBody,
+				body2: intersection.candidate.body,
+				trigger: intersection.candidate.body.isTrigger
+			});
+		}
+
+		return events;
+	} else {
+		return null;
+	}
 }
 
 function moveCCD (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vector3, candidates: CollisionCandidate[]) {
 
 }
 
-function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vector3, candidates: CollisionCandidate[]) {
+function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vector3, candidates: CollisionCandidate[]): MovementResult {
 	const intentPosition = VecPool.alloc().copy(resPosition);
 	const intentVelocity = VecPool.alloc().copy(velocity).scale(TICKRATE/1000);
+
+	let contacts: Set<StaticBody> = new Set();
+
+	let baseVelocityY = intentVelocity.y;
+	let clippedXZ = false;
 
 	let iterations = 0;
 
@@ -253,14 +283,21 @@ function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Ve
 		const groundIntersections = currentIntersections.filter(i => i.type === "ground");
 		if (groundIntersections.length > 0) {
 			let bestY: number = -Infinity;
+			let bestBody: StaticBody | null = null;
 
 			for (const intersection of groundIntersections) {
-				bestY = Math.max(intersection.data.depth * intersection.data.normal.y, bestY);
+				const contactY = intersection.data.depth * intersection.data.normal.y;
+				if (contactY > bestY) {
+					bestY = contactY;
+					bestBody = intersection.candidate.body
+				}
 			}
 
 			intentPosition.y += bestY;
-			iterations++;
 			intentVelocity.y = 0;
+			iterations++;
+
+			contacts.add(bestBody!);	
 			continue;
 		}
 
@@ -268,13 +305,17 @@ function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Ve
 		if (xzIntersections.length > 0) {
 			let bestDepth: number = -Infinity;
 			let bestNormal: Vector3 | null = null;
+			let bestBody: StaticBody | null = null;
 
 			for (const intersection of xzIntersections) {
 				if (intersection.data.depth > bestDepth) {
 					bestDepth = intersection.data.depth;
 					bestNormal = intersection.data.normal;
+					bestBody = intersection.candidate.body;
 				}
 			}
+
+			clippedXZ = bestNormal!.y <= MAX_SLOPE;
 
 			const mtv = VecPool.alloc().copy(bestNormal!).scale(bestDepth);
 			mtv.y = 0;
@@ -300,6 +341,8 @@ function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Ve
 				intentVelocity.z += bestNormal!.z * (-vn);
 			}
 			iterations++;
+
+			contacts.add(bestBody!);
 			continue;
 		}
 
@@ -308,11 +351,13 @@ function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Ve
 			let bestY: number = -Infinity;
 			let bestDepth: number = -Infinity;
 			let bestNormal: Vector3 | null = null;
+			let bestBody: StaticBody | null = null;
 
 			for (const intersection of ceilingIntersections) {
 				bestY = Math.max(intersection.data.depth * intersection.data.normal.y, bestY);
 				bestNormal = intersection.data.normal;
 				bestDepth = intersection.data.depth;
+				bestBody = intersection.candidate.body;
 			}
 
 			const mtv = VecPool.alloc().copy(bestNormal!).scale(bestDepth);
@@ -340,11 +385,45 @@ function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Ve
 			}
 			intentVelocity.y = 0;
 			iterations++;
+
+			contacts.add(bestBody!);
 			continue;
 		}
 	}
 
-	resPosition.copy(intentPosition);
+	let triggerIntersections: FormattedIntersection[] = [];
+	for (const candidate of candidates.filter(c => c.body.isTrigger)) {
+		triggerIntersections = triggerIntersections.concat(gatherIntersections(sourceBody, intentPosition, candidate));
+	}
+
+	const triggerContacts: Set<StaticBody> = new Set();
+	for (const intersection of triggerIntersections) {
+		triggerContacts.add(intersection.candidate.body);
+	}
+
+	let events: CollisionEvent[] = [];
+
+	for (const b of contacts) {
+		events.push({
+			body1: sourceBody,
+			body2: b,
+			trigger: false
+		});
+	}
+
+	for (const t of triggerContacts) {
+		events.push({
+			body1: sourceBody,
+			body2: t,
+			trigger: true
+		});
+	}
+
+	return {
+		desiredPosition: intentPosition,
+		tryStepUp: sourceBody.canStepUp && clippedXZ && baseVelocityY <= 0 && !sourceBody.kinematicBehavior,
+		events: events
+	}
 }
 
 function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): SolveResult {
@@ -355,18 +434,16 @@ function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<numb
 	let resPosition = VecPool.alloc().copy(sourceBody.position);
 	let velocity = VecPool.alloc().copy(sourceBody.velocity);
 
-	const locked = depenetrate(sourceBody, resPosition, candidates.filter(c => !c.body.isTrigger));
-	if (locked) {
-		// collect contact events
-
+	const depResult = depenetrate(sourceBody, resPosition, candidates);
+	if (depResult) {
 		return {
 			desiredPosition: resPosition,
 			locked: true,
-			events: []
+			events: depResult
 		}
 	}
 
-	let events: CollisionEvent[] = [];
+	let events: CollisionEvent[];
 
 	if (!velocity.isZero()) {
 		const shapes = sourceBody.shapes;
@@ -375,11 +452,26 @@ function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<numb
 			moveCCD(sourceBody, resPosition, velocity, candidates);
 		} else {
 			// movement intent -> depenetration -> clipping
-			moveIntent(sourceBody, resPosition, velocity, candidates);
+			const beforeStepUp = moveIntent(sourceBody, resPosition, velocity, candidates);
+
+			if (beforeStepUp.tryStepUp) {
+				const stepUpVec = VecPool.alloc().copy(resPosition);
+				stepUpVec.y += STEP_UP_HEIGHT;
+				const afterStepUp = moveIntent(sourceBody, resPosition, velocity, candidates);
+
+				if (beforeStepUp.desiredPosition.dot(velocity) < afterStepUp.desiredPosition.dot(velocity)) {
+					resPosition.copy(afterStepUp.desiredPosition);
+					events = afterStepUp.events;
+				} else {
+					resPosition.copy(beforeStepUp.desiredPosition);
+					events = beforeStepUp.events;	
+				}
+			} else {
+				resPosition.copy(beforeStepUp.desiredPosition);
+				events = beforeStepUp.events;
+			}
 		}
 	}
-
-	// collect contact events
 
 	resPosition.x |= 0;
 	resPosition.y |= 0;
@@ -388,7 +480,7 @@ function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<numb
 	return {
 		desiredPosition: resPosition,
 		locked: false,
-		events: []
+		events: events!
 	}
 }
 
@@ -453,7 +545,7 @@ function groundCheck (sourceBody: DynamicBody, staticOctree: Octree, statics: Ma
 		const intersections = gatherIntersections(sourceBody, sourceBody.position, candidate);
 
 		for (const intersection of intersections) {
-			if (intersection.data.normal.y >= FLOOR_COS && intersection.data.normal.y > sourceBody.groundNormal.y) {
+			if (intersection.data.normal.y >= MAX_SLOPE && intersection.data.normal.y > sourceBody.groundNormal.y) {
 				sourceBody.supportedBy = candidate.body.id;
 				sourceBody.groundNormal = intersection.data.normal;
 			}
