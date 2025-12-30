@@ -6,6 +6,7 @@ let MAX_SLOPE: number = Math.cos(45 * Math.PI/180);
 let STEP_UP_HEIGHT: number = 200;
 let TICKRATE: number = 20;
 let GROUND_PROBE: number = 200;
+let NUM_DIRECTIONS = 360;
 
 export {
 	GLOBAL_SPEED,
@@ -15,5 +16,6 @@ export {
 	MAX_SLOPE,
 	STEP_UP_HEIGHT,
 	TICKRATE,
-	GROUND_PROBE
+	GROUND_PROBE,
+	NUM_DIRECTIONS
 }

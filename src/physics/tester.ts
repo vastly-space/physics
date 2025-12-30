@@ -33,22 +33,6 @@ export interface RayTestResult {
 }
 
 export class Tester {
-	/*
-		1) aabb x aabb 				OK
-		2) aabb x sphere 			OK
-		3) aabb x capsule 			OK
-		4) aabb x triangle 			OK
-		5) sphere x sphere 			OK
-		6) sphere x capsule 		OK
-		7) sphere x triangle 		OK
-		8) capsule x capsule 		OK
-		9) capsule x triangle 		OK
-		10) swept sphere x aabb 	OK
-		11) swept sphere x sphere 	OK
-		12) swept sphere x capsule 	OK
-		13) swept sphere x triangle 
-	*/
-
 	static is_point_in_triangle (p: Vector3, a: Vector3, b: Vector3, c: Vector3): boolean {
 		const ab = VecPool.alloc().copy(b).sub(a);
 		const bc = VecPool.alloc().copy(c).sub(b);

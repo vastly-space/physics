@@ -6,6 +6,7 @@ import StaticBody from "./physics/staticBody.js"
 import KinematicBody from "./physics/kinematicBody.js"
 import DynamicBody from "./physics/dynamicBody.js"
 import { Controller } from "./controller/controller.js"
+import { generateDirectionsTable } from "./controller/directionsTable.js"
 import TransformationSystem from "./transformations/transformationSystem.js"
 import { solve, groundCheck } from "./solver.js"
 import type { SolveResult } from "./solver.js"
@@ -53,6 +54,8 @@ export class World {
 	private networking: string;
 
 	constructor (options: WorldOptions) {
+		generateDirectionsTable();
+
 		if (options.worldCubeSize !== undefined && options.worldCubeSize > MaxWorldBox) throw new Error("World cube size extending the limit");
 
 		const halfSize = divTrunc(options.worldCubeSize || MaxWorldBox, 2);
