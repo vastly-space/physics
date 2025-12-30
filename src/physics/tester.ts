@@ -43,10 +43,10 @@ export class Tester {
 		7) sphere x triangle 		OK
 		8) capsule x capsule 		OK
 		9) capsule x triangle 		OK
-		10) swept sphere x aabb
-		11) swept sphere x sphere
-		12) swept sphere x capsule
-		13) swept sphere x triangle
+		10) swept sphere x aabb 	OK
+		11) swept sphere x sphere 	OK
+		12) swept sphere x capsule 	OK
+		13) swept sphere x triangle 
 	*/
 
 	static is_point_in_triangle (p: Vector3, a: Vector3, b: Vector3, c: Vector3): boolean {
@@ -701,7 +701,7 @@ export class Tester {
 	// for raycast
 	// all methods return surface normal or null
 
-	static ray_aabb (shape: AABB, from: Vector3, to: Vector3): RayTestResult | null {
+	static ray_box_math (shape: AABB, from: Vector3, to: Vector3, extension: number = 0): RayTestResult | null {
 		const dir = VecPool.alloc().copy(to).sub(from);
 
 		let tEnter: number = -Infinity;
@@ -712,8 +712,8 @@ export class Tester {
 			const axis = i === 0 ? "x" : i === 1 ? "y" : "z";
 			const origin = from[axis];
 			const direction = dir[axis];
-			const min = shape.min[axis];
-			const max = shape.max[axis];
+			const min = shape.min[axis] - extension;
+			const max = shape.max[axis] + extension;
 
 			if (direction === 0) {
 				if (origin < min || origin > max) {
@@ -765,27 +765,26 @@ export class Tester {
 		}
 	}
 
-	static ray_box (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
+	static ray_box (shape: ShapeWrapper, from: Vector3, to: Vector3, extension: number = 0): RayTestResult | null {
 		const aabb = AABBPool.alloc().copy((shape.shape as Box).aabb).translate(shape.parentOffset);
 
-		return Tester.ray_aabb(aabb, from, to);
+		return Tester.ray_box_math(aabb, from, to, extension);
 	}
 
-	static ray_sphere (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
+	static ray_sphere_math (center: Vector3, from: Vector3, to: Vector3, radius: number): RayTestResult | null {
 		const dir = VecPool.alloc().copy(to).sub(from);
-		const center = VecPool.alloc().copy((shape.shape as Sphere).offset).add(shape.parentOffset);
-
 		const oc = VecPool.alloc().copy(from).sub(center);
 
 		const a = dir.dot(dir);
 		const b = 2 * dir.dot(oc);
-		const c = oc.dot(oc);
+		const c = oc.dot(oc) - radius;
 
-		const D = b*b - 4 * a * c;
+		const D = b*b - 4*a*c;
+
 		if (D < 0) return null;
 
-		const t1 = (-b - Math.sqrt(D)) / (2 * a);
-		const t2 = (-b + Math.sqrt(D)) / (2 * a);
+		const t1 = (-b - Math.sqrt(D))/(2*a);
+		const t2 = (-b + Math.sqrt(D))/(2*a);
 
 		let t = Infinity;
 
@@ -801,15 +800,14 @@ export class Tester {
 		return { t, normal, hitPoint, distance };
 	}
 
-	static ray_capsule (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
-		const capsule = (shape.shape as Capsule);
-		const radius = capsule.radius;
-		const sc = VecPool.alloc().copy(shape.parentOffset).add(capsule.offset);
-		const segA = VecPool.alloc().copy(sc);
-		segA.y -= capsule.halfSegmentLength;
-		const segB = VecPool.alloc().copy(sc);
-		segB.y += capsule.halfSegmentLength;
+	static ray_sphere (shape: ShapeWrapper, from: Vector3, to: Vector3, extension: number = 0): RayTestResult | null {
+		const center = VecPool.alloc().copy(shape.shape.offset).add(shape.parentOffset);
+		const radius = ((shape.shape as Sphere).radius + extension);
 
+		return Tester.ray_sphere_math(center, from, to, radius);
+	}
+
+	static ray_capsule_math (segA: Vector3, segB: Vector3, radius: number, from: Vector3, to: Vector3): RayTestResult | null {
 		const [p1, p2] = Tester.closest_points_on_segments(from, to, segA, segB);
 
 		const diff = VecPool.alloc().copy(p1).sub(p2);
@@ -830,37 +828,50 @@ export class Tester {
 		}
 	}
 
-	static ray_triangle (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
-		const triangle = shape.shape as Triangle;
+	static ray_capsule (shape: ShapeWrapper, from: Vector3, to: Vector3, extension: number = 0): RayTestResult | null {
+		const capsule = (shape.shape as Capsule);
+		const radius = capsule.radius + extension;
+		const sc = VecPool.alloc().copy(shape.parentOffset).add(capsule.offset);
+		const segA = VecPool.alloc().copy(sc);
+		segA.y -= capsule.halfSegmentLength;
+		const segB = VecPool.alloc().copy(sc);
+		segB.y += capsule.halfSegmentLength;
+
+		return Tester.ray_capsule_math(segA, segB, radius, from, to);
+	}
+
+	static ray_triangle_math (a: Vector3, b: Vector3, c: Vector3, from: Vector3, to: Vector3): RayTestResult | null {
 		const dir = VecPool.alloc().copy(to).sub(from);
 		const maxT = dir.length();
 		dir.x /= maxT;
 		dir.y /= maxT;
 		dir.z /= maxT;
 
-		const e0 = VecPool.alloc().copy(triangle.b).sub(triangle.a);
-		const e1 = VecPool.alloc().copy(triangle.c).sub(triangle.b);
-		const e2 = VecPool.alloc().copy(triangle.a).sub(triangle.c);
+		const e0 = VecPool.alloc().copy(b).sub(a);
+		const e1 = VecPool.alloc().copy(c).sub(b);
+		const e2 = VecPool.alloc().copy(a).sub(c);
 
 		const n = VecPool.alloc().copy(e0).cross(e1).normalize();
 		
 		const det = dir.dot(n);
 
-		if (det > -1e-8 && det < 1e-8) return null;
+		if (Math.abs(det) < 1e-8) return null;
 
-		const H = VecPool.alloc().copy(triangle.a).sub(from);
-		const t = n.dot(H)/det;
+		if (det > 0) n.neg();
 
-		if (t <= 0 || t > maxT) return null;
+		const H = VecPool.alloc().copy(a).sub(from);
+		const t = (n.dot(H)/det) / maxT;
 
-		const P = VecPool.alloc().copy(dir);
-		P.x *= t;
-		P.y *= t;
-		P.z *= t;
-		P.add(from);
+		if (t <= 0 || t > 1) return null;
+
+		const P = VecPool.alloc().set(
+			from.x + dir.x*t,
+			from.y + dir.y*t,
+			from.z + dir.z*t
+		);
 
 		// first edge
-		let toP = VecPool.alloc().copy(P).sub(triangle.a);
+		let toP = VecPool.alloc().copy(P).sub(a);
 		let edge = VecPool.alloc().copy(e0);
 		edge.cross(toP);
 		let side = n.dot(edge);
@@ -868,7 +879,7 @@ export class Tester {
 		if (side < 0) return null;
 
 		// second edge
-		toP.copy(P).sub(triangle.b);
+		toP.copy(P).sub(b);
 		edge.copy(e1);
 		edge.cross(toP);
 		side = n.dot(edge);
@@ -876,7 +887,7 @@ export class Tester {
 		if (side < 0) return null;
 
 		// third edge
-		toP.copy(P).sub(triangle.c);
+		toP.copy(P).sub(c);
 		edge.copy(e2);
 		edge.cross(toP);
 		side = n.dot(edge);
@@ -888,5 +899,110 @@ export class Tester {
 	    const distance = VecPool.alloc().copy(hitPoint).sub(from).length();
 
 	    return { t, hitPoint, normal, distance };
+	}
+
+	static ray_triangle (shape: ShapeWrapper, from: Vector3, to: Vector3): RayTestResult | null {
+		const triangle = shape.shape as Triangle;
+		
+		return Tester.ray_triangle_math(triangle.a, triangle.b, triangle.c, from, to);
+	}
+
+	static swept_sphere_triangle (triangleWrapper: ShapeWrapper, center: Vector3, movedCenter: Vector3, radius: number): RayTestResult | null {
+		const triangle = triangleWrapper.shape as Triangle;
+
+		let bestResult: RayTestResult | null = null;
+
+		// test against moved faces
+		const a = VecPool.alloc().copy(triangle.a);
+		const b = VecPool.alloc().copy(triangle.b);
+		const c = VecPool.alloc().copy(triangle.c);
+
+		const n = VecPool.alloc().copy(a).cross(b);
+
+		a.x += n.x * radius;
+		a.y += n.y * radius;
+		a.z += n.z * radius;
+		b.x += n.x * radius;
+		b.y += n.y * radius;
+		b.z += n.z * radius;
+		c.x += n.x * radius;
+		c.y += n.y * radius;
+		c.z += n.z * radius;
+
+		let result: RayTestResult | null = Tester.ray_triangle_math(a, b, c, center, movedCenter);
+
+		if (result !== null) {
+			bestResult = result;
+		}
+
+		a.x -= 2 * n.x * radius;
+		a.y -= 2 * n.y * radius;
+		a.z -= 2 * n.z * radius;
+		b.x -= 2 * n.x * radius;
+		b.y -= 2 * n.y * radius;
+		b.z -= 2 * n.z * radius;
+		c.x -= 2 * n.x * radius;
+		c.y -= 2 * n.y * radius;
+		c.z -= 2 * n.z * radius;
+
+		result = Tester.ray_triangle_math(a, b, c, center, movedCenter);
+
+		if (result !== null) {
+			if (bestResult === null || result.t < bestResult.t) bestResult = result;
+		}
+
+		// restore points
+
+		a.x += n.x * radius;
+		a.y += n.y * radius;
+		a.z += n.z * radius;
+		b.x += n.x * radius;
+		b.y += n.y * radius;
+		b.z += n.z * radius;
+		c.x += n.x * radius;
+		c.y += n.y * radius;
+		c.z += n.z * radius;
+
+		// test against edges
+
+		result = Tester.ray_capsule_math(a, b, radius, center, movedCenter);
+
+		if (result !== null) {
+			if (bestResult === null || result.t < bestResult.t) bestResult = result;
+		}
+
+		result = Tester.ray_capsule_math(b, c, radius, center, movedCenter);
+
+		if (result !== null) {
+			if (bestResult === null || result.t < bestResult.t) bestResult = result;
+		}
+
+		result = Tester.ray_capsule_math(c, a, radius, center, movedCenter);
+
+		if (result !== null) {
+			if (bestResult === null || result.t < bestResult.t) bestResult = result;
+		}
+
+		// test against vertices
+
+		result = Tester.ray_sphere_math(a, center, movedCenter, radius);
+
+		if (result !== null) {
+			if (bestResult === null || result.t < bestResult.t) bestResult = result;
+		}
+
+		result = Tester.ray_sphere_math(b, center, movedCenter, radius);
+
+		if (result !== null) {
+			if (bestResult === null || result.t < bestResult.t) bestResult = result;
+		}
+
+		result = Tester.ray_sphere_math(c, center, movedCenter, radius);
+
+		if (result !== null) {
+			if (bestResult === null || result.t < bestResult.t) bestResult = result;
+		}
+
+		return result;
 	}
 }

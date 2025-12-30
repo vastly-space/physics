@@ -70,7 +70,7 @@ export class OctNode {
 	}
 
 	queryRay(from: Vector3, to: Vector3, out: OctItem[], mask: number): OctItem[] {
-		if (Tester.ray_aabb(this._bounds, from, to) !== null) {
+		if (Tester.ray_box_math(this._bounds, from, to) !== null) {
 			if (this._children[0] === null) {
 				// leaf
 				for (const item of this._items) {

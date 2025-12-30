@@ -6,7 +6,7 @@ import StaticBody from "./physics/staticBody.js"
 import KinematicBody from "./physics/kinematicBody.js"
 import DynamicBody from "./physics/dynamicBody.js"
 import { Tester } from "./physics/tester.js"
-import type { Intersection } from "./physics/tester.js"
+import type { Intersection, RayTestResult } from "./physics/tester.js"
 import { divTrunc } from "./math/utils.js"
 import { VecPool, AABBPool } from "./utils/pool.js"
 
@@ -253,8 +253,137 @@ function depenetrate (sourceBody: DynamicBody, resPosition: Vector3, candidates:
 	}
 }
 
-function moveCCD (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vector3, candidates: CollisionCandidate[]) {
+function moveCCD (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vector3, candidates: CollisionCandidate[]): MovementResult {
+	const sphere = sourceBody.shapes[0] as Sphere;
+	const intentPosition = VecPool.alloc().copy(resPosition);
+	const intentVelocity = VecPool.alloc().copy(velocity);
 
+	let triggersTouched: Set<StaticBody> = new Set();
+	let nonTriggersTouched: Set<StaticBody> = new Set();
+
+	let baseVelocityY = intentVelocity.y;
+	let clippedXZ = false;
+
+	let iterations = 0;
+
+	const checkCandidates = sourceBody.kinematicBehavior ? candidates.filter(c => c.body.isTrigger) : candidates;
+
+	while (intentVelocity.lengthSquared() > 100) {
+		const fromVec = VecPool.alloc().copy(intentPosition).add(sphere.offset);
+		const toVec = VecPool.alloc().copy(fromVec).add(intentVelocity);
+
+		let collision: RayTestResult | null = null;
+		let collisionBody: StaticBody | null = null;
+
+		let clipped = false;
+
+		for (const candidate of checkCandidates) {
+			if (candidate.triangleIndex !== undefined) {
+				const lRes = Tester.swept_sphere_triangle(
+					{ parentOffset: Vector3.Zero, shape: (candidate.shape as Trimesh).triangles[candidate.triangleIndex]! },
+					fromVec,
+					toVec,
+					sphere.radius
+				);
+
+				if (lRes !== null) {
+					if (candidate.body.isTrigger) {
+						triggersTouched.add(candidate.body);
+					} else if (Math.abs(lRes.normal.dot(intentVelocity)) < 1e-8 && (collision === null || lRes.t < collision.t)) {
+						collision = lRes;
+						collisionBody = candidate.body;
+						clippedXZ = lRes.normal!.y <= MAX_SLOPE;
+						clipped = true;
+					}
+				}
+			} else {
+				for (const cShape of candidate.body.shapes) {
+					let lRes: RayTestResult | null = null;
+
+					switch (cShape.type) {
+						case "box":
+							lRes = Tester.ray_box(
+								{ parentOffset: candidate.body.position, shape: cShape },
+								fromVec,
+								toVec,
+								sphere.radius
+							);
+							break;
+						case "sphere":
+							lRes = Tester.ray_sphere(
+								{ parentOffset: candidate.body.position, shape: cShape },
+								fromVec,
+								toVec,
+								sphere.radius
+							);
+							break;
+						case "capsule":
+							lRes = Tester.ray_capsule(
+								{ parentOffset: candidate.body.position, shape: cShape },
+								fromVec,
+								toVec,
+								sphere.radius
+							);
+							break;
+					}
+
+					if (lRes !== null) {
+						if (candidate.body.isTrigger) {
+							triggersTouched.add(candidate.body);
+						} else if (Math.abs(lRes.normal.dot(intentVelocity)) < 1e-8 && (collision === null || lRes.t < collision.t)) {
+							collision = lRes;
+							collisionBody = candidate.body;
+							clippedXZ = lRes.normal!.y <= MAX_SLOPE;
+							clipped = true;
+						}
+					}
+				}
+			}
+		}
+
+		if (collision === null) {
+			intentPosition.add(intentVelocity);
+
+			break;
+		} else {
+			nonTriggersTouched.add(collisionBody!);
+
+			intentPosition.x += intentVelocity.x * collision.t;
+			intentPosition.y += intentVelocity.y * collision.t;
+			intentPosition.z += intentVelocity.z * collision.t;
+
+			const vn = intentVelocity.dot(collision.normal);
+			if (vn < 0) {
+				intentVelocity.x += collision.normal.x * (-vn);
+				intentVelocity.y += collision.normal.y * (-vn);
+				intentVelocity.z += collision.normal.z * (-vn);
+			}
+		}
+	}
+
+	const events: CollisionEvent[] = [];
+
+	for (const t of triggersTouched) {
+		events.push({
+			body1: sourceBody,
+			body2: t,
+			trigger: true
+		});
+	}
+
+	for (const b of nonTriggersTouched) {
+		events.push({
+			body1: sourceBody,
+			body2: b,
+			trigger: false
+		});
+	}
+
+	return {
+		desiredPosition: intentPosition,
+		tryStepUp: sourceBody.canStepUp && clippedXZ && baseVelocityY <= 0 && !sourceBody.kinematicBehavior,
+		events: events
+	}
 }
 
 function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vector3, candidates: CollisionCandidate[]): MovementResult {
@@ -268,126 +397,130 @@ function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Ve
 
 	let iterations = 0;
 
-	while (intentVelocity.lengthSquared() > 100 && iterations < MAX_DEPENETRATION_ITERATIONS) {
+	if (sourceBody.kinematicBehavior) {
 		intentPosition.add(intentVelocity);
+	} else {
+		while (intentVelocity.lengthSquared() > 100 && iterations < MAX_DEPENETRATION_ITERATIONS) {
+			intentPosition.add(intentVelocity);
 
-		let currentIntersections: FormattedIntersection[] = [];
+			let currentIntersections: FormattedIntersection[] = [];
 
-		for (const candidate of candidates) {
-			currentIntersections = currentIntersections.concat(gatherIntersections(sourceBody, intentPosition, candidate));
-		}
-		currentIntersections = currentIntersections.filter(i => i.data.depth >= SLOP);
+			for (const candidate of candidates) {
+				currentIntersections = currentIntersections.concat(gatherIntersections(sourceBody, intentPosition, candidate));
+			}
+			currentIntersections = currentIntersections.filter(i => i.data.depth >= SLOP);
 
-		if (currentIntersections.length === 0) break;
+			if (currentIntersections.length === 0) break;
 
-		const groundIntersections = currentIntersections.filter(i => i.type === "ground");
-		if (groundIntersections.length > 0) {
-			let bestY: number = -Infinity;
-			let bestBody: StaticBody | null = null;
+			const groundIntersections = currentIntersections.filter(i => i.type === "ground");
+			if (groundIntersections.length > 0) {
+				let bestY: number = -Infinity;
+				let bestBody: StaticBody | null = null;
 
-			for (const intersection of groundIntersections) {
-				const contactY = intersection.data.depth * intersection.data.normal.y;
-				if (contactY > bestY) {
-					bestY = contactY;
-					bestBody = intersection.candidate.body
+				for (const intersection of groundIntersections) {
+					const contactY = intersection.data.depth * intersection.data.normal.y;
+					if (contactY > bestY) {
+						bestY = contactY;
+						bestBody = intersection.candidate.body
+					}
 				}
+
+				intentPosition.y += bestY;
+				intentVelocity.y = 0;
+				iterations++;
+
+				contacts.add(bestBody!);	
+				continue;
 			}
 
-			intentPosition.y += bestY;
-			intentVelocity.y = 0;
-			iterations++;
+			const xzIntersections = currentIntersections.filter(i => (i.type === "xz" || i.type === "ceiling"));
+			if (xzIntersections.length > 0) {
+				let bestDepth: number = -Infinity;
+				let bestNormal: Vector3 | null = null;
+				let bestBody: StaticBody | null = null;
 
-			contacts.add(bestBody!);	
-			continue;
-		}
+				for (const intersection of xzIntersections) {
+					if (intersection.data.depth > bestDepth) {
+						bestDepth = intersection.data.depth;
+						bestNormal = intersection.data.normal;
+						bestBody = intersection.candidate.body;
+					}
+				}
 
-		const xzIntersections = currentIntersections.filter(i => (i.type === "xz" || i.type === "ceiling"));
-		if (xzIntersections.length > 0) {
-			let bestDepth: number = -Infinity;
-			let bestNormal: Vector3 | null = null;
-			let bestBody: StaticBody | null = null;
+				clippedXZ = bestNormal!.y <= MAX_SLOPE;
 
-			for (const intersection of xzIntersections) {
-				if (intersection.data.depth > bestDepth) {
-					bestDepth = intersection.data.depth;
+				const mtv = VecPool.alloc().copy(bestNormal!).scale(bestDepth);
+				mtv.y = 0;
+				const dir = VecPool.alloc().copy(intentVelocity).normalize();
+				dir.y = 0;
+
+				const forward = mtv.dot(dir);
+
+				if (forward > 0) {
+					mtv.x -= dir.x * forward;
+					mtv.z -= dir.z * forward;
+				}
+
+				intentPosition.set(
+					intentPosition.x + mtv.x,
+					intentPosition.y,
+					intentPosition.z + mtv.z
+				);
+
+				const vn = intentVelocity.dot(bestNormal!);
+				if (vn < 0) {
+					intentVelocity.x += bestNormal!.x * (-vn);
+					intentVelocity.z += bestNormal!.z * (-vn);
+				}
+				iterations++;
+
+				contacts.add(bestBody!);
+				continue;
+			}
+
+			const ceilingIntersections = currentIntersections.filter(i => i.type === "ceiling");
+			if (ceilingIntersections.length > 0) {
+				let bestY: number = -Infinity;
+				let bestDepth: number = -Infinity;
+				let bestNormal: Vector3 | null = null;
+				let bestBody: StaticBody | null = null;
+
+				for (const intersection of ceilingIntersections) {
+					bestY = Math.max(intersection.data.depth * intersection.data.normal.y, bestY);
 					bestNormal = intersection.data.normal;
+					bestDepth = intersection.data.depth;
 					bestBody = intersection.candidate.body;
 				}
+
+				const mtv = VecPool.alloc().copy(bestNormal!).scale(bestDepth);
+				mtv.y = 0;
+				const dir = VecPool.alloc().copy(intentVelocity).normalize();
+				dir.y = 0;
+
+				const forward = mtv.dot(dir);
+
+				if (forward > 0) {
+					mtv.x -= dir.x * forward;
+					mtv.z -= dir.z * forward;
+				}
+
+				intentPosition.set(
+					intentPosition.x + mtv.x,
+					intentPosition.y - bestY,
+					intentPosition.z + mtv.z
+				);
+				
+				const vn = intentVelocity.dot(bestNormal!);
+				if (vn < 0) {
+					intentVelocity.x += bestNormal!.x * (-vn);
+					intentVelocity.z += bestNormal!.z * (-vn);
+				}
+				intentVelocity.y = 0;
+				iterations++;
+
+				contacts.add(bestBody!);
+				continue;
 			}
-
-			clippedXZ = bestNormal!.y <= MAX_SLOPE;
-
-			const mtv = VecPool.alloc().copy(bestNormal!).scale(bestDepth);
-			mtv.y = 0;
-			const dir = VecPool.alloc().copy(intentVelocity).normalize();
-			dir.y = 0;
-
-			const forward = mtv.dot(dir);
-
-			if (forward > 0) {
-				mtv.x -= dir.x * forward;
-				mtv.z -= dir.z * forward;
-			}
-
-			intentPosition.set(
-				intentPosition.x + mtv.x,
-				intentPosition.y,
-				intentPosition.z + mtv.z
-			);
-
-			const vn = intentVelocity.dot(bestNormal!);
-			if (vn < 0) {
-				intentVelocity.x += bestNormal!.x * (-vn);
-				intentVelocity.z += bestNormal!.z * (-vn);
-			}
-			iterations++;
-
-			contacts.add(bestBody!);
-			continue;
-		}
-
-		const ceilingIntersections = currentIntersections.filter(i => i.type === "ceiling");
-		if (ceilingIntersections.length > 0) {
-			let bestY: number = -Infinity;
-			let bestDepth: number = -Infinity;
-			let bestNormal: Vector3 | null = null;
-			let bestBody: StaticBody | null = null;
-
-			for (const intersection of ceilingIntersections) {
-				bestY = Math.max(intersection.data.depth * intersection.data.normal.y, bestY);
-				bestNormal = intersection.data.normal;
-				bestDepth = intersection.data.depth;
-				bestBody = intersection.candidate.body;
-			}
-
-			const mtv = VecPool.alloc().copy(bestNormal!).scale(bestDepth);
-			mtv.y = 0;
-			const dir = VecPool.alloc().copy(intentVelocity).normalize();
-			dir.y = 0;
-
-			const forward = mtv.dot(dir);
-
-			if (forward > 0) {
-				mtv.x -= dir.x * forward;
-				mtv.z -= dir.z * forward;
-			}
-
-			intentPosition.set(
-				intentPosition.x + mtv.x,
-				intentPosition.y - bestY,
-				intentPosition.z + mtv.z
-			);
-			
-			const vn = intentVelocity.dot(bestNormal!);
-			if (vn < 0) {
-				intentVelocity.x += bestNormal!.x * (-vn);
-				intentVelocity.z += bestNormal!.z * (-vn);
-			}
-			intentVelocity.y = 0;
-			iterations++;
-
-			contacts.add(bestBody!);
-			continue;
 		}
 	}
 
@@ -445,32 +578,28 @@ function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<numb
 
 	let events: CollisionEvent[];
 
-	if (!velocity.isZero()) {
-		const shapes = sourceBody.shapes;
-		if (shapes.length === 1 && shapes[0].type === "sphere") {
-			// CCD
-			moveCCD(sourceBody, resPosition, velocity, candidates);
+	const shapes = sourceBody.shapes;
+
+	const moveFunction = shapes.length === 1 && shapes[0].type === "sphere" ? moveCCD : moveIntent;
+
+	// movement intent -> depenetration -> clipping
+	const beforeStepUp = moveFunction(sourceBody, resPosition, velocity, candidates);
+
+	if (beforeStepUp.tryStepUp) {
+		const stepUpVec = VecPool.alloc().copy(resPosition);
+		stepUpVec.y += STEP_UP_HEIGHT;
+		const afterStepUp = moveFunction(sourceBody, resPosition, velocity, candidates);
+
+		if (beforeStepUp.desiredPosition.dot(velocity) < afterStepUp.desiredPosition.dot(velocity)) {
+			resPosition.copy(afterStepUp.desiredPosition);
+			events = afterStepUp.events;
 		} else {
-			// movement intent -> depenetration -> clipping
-			const beforeStepUp = moveIntent(sourceBody, resPosition, velocity, candidates);
-
-			if (beforeStepUp.tryStepUp) {
-				const stepUpVec = VecPool.alloc().copy(resPosition);
-				stepUpVec.y += STEP_UP_HEIGHT;
-				const afterStepUp = moveIntent(sourceBody, resPosition, velocity, candidates);
-
-				if (beforeStepUp.desiredPosition.dot(velocity) < afterStepUp.desiredPosition.dot(velocity)) {
-					resPosition.copy(afterStepUp.desiredPosition);
-					events = afterStepUp.events;
-				} else {
-					resPosition.copy(beforeStepUp.desiredPosition);
-					events = beforeStepUp.events;	
-				}
-			} else {
-				resPosition.copy(beforeStepUp.desiredPosition);
-				events = beforeStepUp.events;
-			}
+			resPosition.copy(beforeStepUp.desiredPosition);
+			events = beforeStepUp.events;	
 		}
+	} else {
+		resPosition.copy(beforeStepUp.desiredPosition);
+		events = beforeStepUp.events;
 	}
 
 	resPosition.x |= 0;

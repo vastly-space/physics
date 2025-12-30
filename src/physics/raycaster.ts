@@ -122,7 +122,7 @@ export class Raycaster {
 		for (const [id, kBody] of kinematics) {
 			if (mask !== 0 && kBody.layer !== 0 && ((mask & kBody.layer) === 0)) continue;
 
-			if (Tester.ray_aabb(kBody.aabb, from, to)) {
+			if (Tester.ray_box_math(kBody.aabb, from, to)) {
 				candidates.push({ body: kBody });
 			}
 		}
@@ -130,7 +130,7 @@ export class Raycaster {
 		for (const [id, dBody] of dynamics) {
 			if (mask !== 0 && dBody.layer !== 0 && ((mask & dBody.layer) === 0)) continue;
 
-			if (Tester.ray_aabb(dBody.aabb, from, to)) {
+			if (Tester.ray_box_math(dBody.aabb, from, to)) {
 				candidates.push({ body: dBody });
 			}
 		}
