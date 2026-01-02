@@ -1,79 +1,82 @@
 import Vector3 from "../math/vector3.js"
 import { Transformation } from "./transformation.js"
-import type { TransformationKind } from "./transformation.js"
-import KinematicBody from "../physics/kinematicBody.js"
-import DynamicBody from "../physics/dynamicBody.js"
+import type { EndCallback } from "./transformation.js"
 import { TICKRATE } from "../constants.js"
+import { VecPool } from "../utils/pool.js"
 
 export default class TransformationSystem {
-	private _tick: number;
-	private transformations: Map<number, { counter: number; transformations: Map<number, Transformation> }> = new Map();
+	private _tick: number = 0;
+	private bodyPosition: Vector3;
+	private transformations: Map<number, Transformation>= new Map();
+	private counter: number = 0;
 
-	constructor (currentTick: number) {
-		this._tick = currentTick;
+	constructor (originPos: Vector3) {
+		this.bodyPosition = originPos;
 	}
 
-	addTransformation (bodyId: number, kind: TransformationKind, data: Vector3 | Vector3[], duration: number): number {
-		if (!this.transformations.has(bodyId)) {
-			this.transformations.set(bodyId, { counter: 0, transformations: new Map() });
-		}
-
-		const tr = this.transformations.get(bodyId);
+	add (data: Vector3[], duration: number, endCallback: EndCallback | null = null, relative: boolean = true, loop: boolean = false) {
 		const startTick = this._tick + 1;
 		const endTick = startTick + Math.max(1, Math.round(duration/1000 * TICKRATE));
-		const transformationId = tr!.counter++;
-		tr!.transformations.set(transformationId, new Transformation(kind, data, this._tick, startTick, endTick));
+		const transformationId = this.counter++;
+
+		if (!relative) {
+			// recalculate data vectors
+			const resData: Vector3[] = [];
+			const pos = VecPool.alloc().copy(this.bodyPosition);
+
+			for (const v of data) {
+				const diff = new Vector3();
+				diff.copy(v).sub(pos);
+				resData.push(diff);
+				pos.copy(v);
+			}
+
+			if (loop) {
+				const diff = new Vector3();
+				diff.copy(this.bodyPosition).sub(pos);
+				resData.push(diff);
+			}
+
+			data = resData;
+		}
+
+		this.transformations.set(transformationId, new Transformation(data, startTick, endTick, endCallback, loop));
 
 		return transformationId;
 	}
 
-	removeTransformation (bodyId: number, transformationId: number) {
-		const tr = this.transformations.get(bodyId);
-
-		if (tr !== undefined) {
-			tr.transformations.delete(transformationId);
-		}
+	remove (transformationId: number) {
+		this.transformations.delete(transformationId);
 	}
 
-	clearTransformationsForBody (bodyId: number) {
-		this.transformations.delete(bodyId);
+	clear () {
+		this.transformations.clear();
 	}
 
-	step (currentTick: number, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>) {
-		const toDelete: Set<number> = new Set();
-
-		const posVec = new Vector3();
+	step (currentTick: number): Vector3 {
+		const posVec = VecPool.alloc().copy(this.bodyPosition);
 		const ended: Set<number> = new Set();
+		const runAfter: EndCallback[] = [];
 
-		for (const [bodyId, container] of this.transformations) {
-			posVec.set(0, 0, 0);
-			ended.clear();
-
-			let body: KinematicBody | DynamicBody | undefined = kinematics.get(bodyId);
-			if (!body) body = dynamics.get(bodyId);
-
-			let skip = body === undefined || (body instanceof DynamicBody && !(body as DynamicBody).kinematicBehavior);
-
-			if (!skip) {
-				for (const [tId, t] of container.transformations) {
-					const isOver = t.currentStep(currentTick, posVec);
-					if (isOver) {
-						ended.add(tId);
-					}
-				}
-
-				for (const endedId of ended) {
-					container.transformations.delete(endedId);
-				}
-				body!.scriptPos.copy(posVec);
-			} else {
-				toDelete.add(bodyId);
+		for (const [tId, t] of this.transformations) {
+			const isOver = t.currentStep(currentTick, posVec);
+			if (isOver) {
+				if (t.endCallback !== null) runAfter.push(t.endCallback);
+				ended.add(tId);
 			}
 		}
 
-		for (const id of toDelete) {
-			this.transformations.delete(id);
+		for (const endedId of ended) {
+			this.transformations.delete(endedId);
 		}
+
+		for (const cb of runAfter) {
+			if (cb !== null) cb();
+		}
+
+		this._tick = currentTick;
+
+		return posVec;
 	}
 
 	set tick (val: number) {

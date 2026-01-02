@@ -1,66 +1,57 @@
 import Vector3 from "../math/vector3.js"
 import { divTrunc } from "../math/utils.js"
 
-export type TransformationKind = 'pose' | 'steer' | 'poseSequence' | 'steerSequence';
+export type EndCallback = () => void;
 
 export interface ActionData {
 	duration: number;
 	startTick: number;
-	step: Vector3;
-	remaining: Vector3;
-	error_phase: Vector3;
+	step: number[];
+	remainder: number[];
+	error: number[];
 }
 
 export class Transformation {
+	private _loop: boolean;
 	private _startTick: number;
 	private _endTick: number;
-	public readonly kind: TransformationKind;
-	private actionData: ActionData | ActionData[];
+	private actionData: ActionData[] = [];
 	private currentAction: number = 0;
+	private currentTick: number;
+	public endCallback: EndCallback | null;
 
-	constructor (kind: TransformationKind, data: Vector3 | Vector3[], currentTick: number, startTick: number, endTick: number) {
+	constructor (data: Vector3[], startTick: number, endTick: number, endCallback: EndCallback | null, loop: boolean) {
 		this._startTick = startTick;
+		this.currentTick = startTick;
 		this._endTick = endTick;
-		this.kind = kind;
+		this.endCallback = endCallback;
+		this._loop = loop;
 
-		switch (this.kind) {
-			case "pose":
-			case "steer":
-				const tickDuration = endTick - startTick;
-				this.actionData = Transformation.buildAction(data as Vector3, startTick, tickDuration);
-				break;
-			case "poseSequence":
-			case "steerSequence":
-				const totalTicks = endTick - startTick;
-				const vectors = data as Vector3[];
-				const lengths = vectors.map(v => { return Math.floor(Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)); });
-				const totalLength = lengths.reduce((acc, val) => acc + val, 0);
-				
-				const base = lengths.map(l => Math.floor(totalTicks * l/totalLength));
-				const remNum = base.map((b, index) => totalTicks * lengths[index] - base[index] * totalLength);
-				let e = 0;
-				const segTicks: number[] = [];
+		const duration = endTick - startTick;
+		const lengths = data.map(v => v.length());
+		const totalLength = lengths.reduce((acc, val) => acc + val, 0);
+		const times = lengths.map(l => Math.floor((l * duration) / totalLength));
+		const remainder = duration - times.reduce((acc, val) => acc + val, 0);
 
-				for (let i=0; i<base.length; i++) {
-					e += remNum[i];
-					segTicks[i] = base[i];
-					if (e >= totalLength) {
-						e -= totalLength;
-						segTicks[i] += 1;
-					}
+		if (remainder > 0) {
+			const delta = remainder/duration;
+			let error = 0;
+
+			for (let i=0; i<times.length; i++) {
+				error += times[i] * delta;
+
+				if (error >= 1) {
+					let diff = Math.floor(error - 1);
+					error = error - diff;
+					times[i] += diff;
 				}
+			}
+		}
 
-				const result: ActionData[] = [];
-				let tickOffset = this._startTick;
-
-				for (let i=0; i<vectors.length; i++) {
-					result.push(Transformation.buildAction(vectors[i], tickOffset, segTicks[i]));
-					tickOffset += base[i];
-				}
-
-				this.actionData = result;
-
-				break;
+		let tick = startTick;
+		for (let i=0; i<data.length; i++) {
+			this.actionData.push(Transformation.buildAction(data[i], tick, times[i] as number));
+			tick += times[i] as number;
 		}
 	}
 
@@ -72,59 +63,57 @@ export class Transformation {
 		return this._endTick;
 	}
 
-	currentStep (tick: number, out: Vector3): boolean {
-		let action: ActionData;
-		switch (this.kind) {
-			case "pose":
-			case "steer":
-				action = this.actionData as ActionData;
+	get loop (): boolean {
+		return this._loop;
+	}
 
-				if (action.duration === 0 && action.startTick === tick) {
-					out.set(
-						out.x + action.step.x,
-						out.y + action.step.y,
-						out.z + action.step.z
-					);
-					return true;
-				}
+	currentStep (dstTick: number, out: Vector3): boolean {
+		while (this.currentTick < dstTick) {
+			this.currentTick++;
 
-				if (action.startTick + action.duration <= tick) {
-					return true;
-				} else {
-					const k = tick - action.startTick;
-					out.set(
-						out.x + action.step.x + Transformation.calcExtra(action.error_phase.x, k, action.remaining.x, action.duration),
-						out.y + action.step.y + Transformation.calcExtra(action.error_phase.y, k, action.remaining.y, action.duration),
-						out.z + action.step.z + Transformation.calcExtra(action.error_phase.z, k, action.remaining.z, action.duration)
-					);
-					return false;
-				}
-				break;
-			case "poseSequence":
-			case "steerSequence":
-				// for client, unshift all actions that already passed
-				const data = this.actionData as ActionData[];
-				action = data[this.currentAction];
+			const action = this.actionData[this.currentAction];
 
-				while (action.startTick + action.duration <= tick) {
+			if (action.startTick > this.currentTick) continue;
+
+			if (action.duration === 0 && action.startTick === this.currentTick) {
+				out.set(
+					out.x + action.step[0],
+					out.y + action.step[1],
+					out.z + action.step[2]
+				);
+				this.currentAction++;
+			} else {
+				out.set(
+					out.x + action.step[0] + Transformation.calcExtra(0, action),
+					out.y + action.step[1] + Transformation.calcExtra(1, action),
+					out.z + action.step[2] + Transformation.calcExtra(2, action)
+				);
+
+				if (this.currentTick === action.startTick + action.duration) {
 					this.currentAction++;
-					if (this.currentAction === data.length) return false;
-					else action = data[this.currentAction];
 				}
+			}
+		}
 
-				// now we know our current action
-				if (action.startTick + action.duration <= tick) {
-					return true;
-				} else {
-					const k = tick - action.startTick;
-					out.set(
-						out.x + action.step.x + Transformation.calcExtra(action.error_phase.x, k, action.remaining.x, action.duration),
-						out.y + action.step.y + Transformation.calcExtra(action.error_phase.y, k, action.remaining.y, action.duration),
-						out.z + action.step.z + Transformation.calcExtra(action.error_phase.z, k, action.remaining.z, action.duration)
-					);
-					return false;
-				}
-				break;
+		if (this.currentAction === this.actionData.length) {
+			if (this.loop) {
+				this.rewind();
+			} else {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	rewind () {
+		this.currentAction = 0;
+
+		let tick = this.currentTick+1;
+
+		for (let i=0; i<this.actionData.length; i++) {
+			this.actionData[i].startTick = tick;
+			tick += this.actionData[i].duration;
 		}
 	}
 
@@ -133,33 +122,40 @@ export class Transformation {
 			return {
 				duration: duration,
 				startTick: startTick,
-				step: vec,
-				remaining: new Vector3(),
-				error_phase: new Vector3()
+				step: [vec.x, vec.y, vec.z],
+				remainder: [0,0,0],
+				error: [0,0,0]
 			}
 		}
 
-		const step = new Vector3(
+		const step = [
 			divTrunc(vec.x, duration),
 			divTrunc(vec.y, duration),
 			divTrunc(vec.z, duration)
-		);
-		const remaining = new Vector3(
-			Math.abs(vec.x) - step.x * duration,
-			Math.abs(vec.y) - step.y * duration,
-			Math.abs(vec.z) - step.z * duration
-		);
+		];
+		const remainder = [
+			vec.x - step[0] * duration,
+			vec.y - step[1] * duration,
+			vec.z - step[2] * duration
+		];
 
 		return {
 			duration: duration,
 			startTick: startTick,
 			step: step,
-			remaining: remaining,
-			error_phase: new Vector3()
+			remainder: remainder,
+			error: [0,0,0]
 		}
 	}
 
-	private static calcExtra(phase0: number, k: number, r: number, N: number) {
-		return Math.floor((phase0 + (k + 1) * r) / N) - Math.floor((phase0 + k * r) / N);
+	private static calcExtra (index: number, action: ActionData): number {
+		action.error[index] += action.remainder[index] + 1;
+
+		if (action.error[index] >= action.duration + 1) {
+			action.error[index] -= action.duration + 1;
+			return 1;
+		} else {
+			return 0;
+		}
 	}
 }

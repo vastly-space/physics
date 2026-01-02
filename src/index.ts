@@ -24,7 +24,7 @@ import type { WorldOptions } from "./world.js"
 import type Shape from "./physics/shape.js"
 import type { OctItem } from "./math/octree.js"
 import type { ControllerState } from "./controller/controller.js"
-import type { TransformationKind, ActionData } from "./transformations/transformation.js"
+import type { ActionData } from "./transformations/transformation.js"
 import type { ShapeWrapper, Collision } from "./physics/tester.js"
 import type { CollisionEvent } from "./solver.js"
 
@@ -33,7 +33,6 @@ export type {
 	Shape,
 	OctItem,
 	ControllerState,
-	TransformationKind,
 	ActionData,
 	ShapeWrapper,
 	Collision,

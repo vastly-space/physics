@@ -16,6 +16,7 @@ export default class DynamicBody extends KinematicBody {
 	protected _gravityMultiplier: number = 1;
 	protected _canStepUp: boolean = false;
 	protected _triggerIntersections: Set<number> = new Set();
+	protected _sweptAABB: AABB = new AABB(new Vector3(), new Vector3());
 
 	get supportedBy (): number {
 		return this._supportedBy;
@@ -99,6 +100,7 @@ export default class DynamicBody extends KinematicBody {
 
 		if (val) {
 			this._prevPos.copy(this._position);
+			this.transformations.clear();
 		} else {
 			this._scriptMove = false;
 		}
@@ -120,6 +122,10 @@ export default class DynamicBody extends KinematicBody {
 		this._gravityMultiplier = val;
 	}
 
+	get sweptAABB (): AABB {
+		return this._sweptAABB;
+	}
+
 	moveBy (vec: Vector3) {
 		this._position.add(vec);
 		this._aabb.translate(vec);
@@ -132,15 +138,6 @@ export default class DynamicBody extends KinematicBody {
 			const tickV = this.velocity.scale(TICKRATE/1000);
 
 			this._sweptAABB.copy(this._aabb).sweep(tickV);
-		}
-	}
-
-	postStep (tick: number) {
-		if (this._kinematicBehavior) {
-			super.postStep(tick);
-		} else {
-			this._anchorTick = tick;
-			this._anchorPos.copy(this._position);
 		}
 	}
 

@@ -7,12 +7,10 @@ import KinematicBody from "./physics/kinematicBody.js"
 import DynamicBody from "./physics/dynamicBody.js"
 import { Controller } from "./controller/controller.js"
 import { generateDirectionsTable } from "./controller/directionsTable.js"
-import TransformationSystem from "./transformations/transformationSystem.js"
 import { solve, groundCheck } from "./solver.js"
 import type { SolveResult } from "./solver.js"
 import { VecPool } from "./utils/pool.js"
 import { TICKRATE, GLOBAL_GRAVITY, MAX_DOWN_SPEED, STEP_UP_HEIGHT } from "./constants.js"
-
 
 const MaxWorldBox = 2147483647 * 2;
 
@@ -50,7 +48,6 @@ export class World {
 	private kinematics: Map<number, KinematicBody> = new Map();
 	private dynamics: Map<number, DynamicBody> = new Map();
 	private controllers: Map<number, Controller> = new Map();
-	private transformationSystem: TransformationSystem;
 	private networking: string;
 
 	constructor (options: WorldOptions) {
@@ -63,7 +60,6 @@ export class World {
 			new Vector3(-halfSize, -halfSize, -halfSize),
 			new Vector3(halfSize, halfSize, halfSize)
 		));
-		this.transformationSystem = new TransformationSystem(this._tick);
 		this.networking = options.networking;
 	}
 
@@ -73,16 +69,27 @@ export class World {
 
 	set tick (val: number) {
 		this._tick = val;
-		this.transformationSystem.tick = val;
+		for (const [id, b] of this.kinematics) {
+			b.transformations.tick = val;
+		}
+		for (const [id, b] of this.dynamics) {
+			b.transformations.tick = val;
+		}
 	}
 
 	step (): TickEvent[] {
 		this._tick++;
 
-		this.transformationSystem.step(this._tick, this.kinematics, this.dynamics);
-
 		for (const [id, k] of this.kinematics.entries()) {
+			k.scriptPos = k.transformations.step(this._tick);
 			k.preStep();
+		}
+
+		for (const [id, d] of this.dynamics.entries()) {
+			if (d.kinematicBehavior) {
+				d.scriptPos = d.transformations.step(this._tick);
+				d.preStep();
+			}
 		}
 
 		let deps: Record<number, number> = {};
@@ -91,6 +98,7 @@ export class World {
 			let envVelocity = VecPool.alloc().set(0, 0, 0);
 			// update environmental speed
 			if (!d.kinematicBehavior) {
+				d.transformations.step(this._tick);
 				if (d.supportedBy !== -1) {
 					// we have a platform that carries body
 					if (this.kinematics.has(d.supportedBy)) {
@@ -192,8 +200,6 @@ export class World {
 	    	groundCheck(d, this.octree, this.statics, this.kinematics, this.dynamics);
 	    }
 
-	    this.tick++;
-
 		return tickEvents;
 	}
 
@@ -205,9 +211,11 @@ export class World {
 				break;
 			case "kinematic":
 				this.kinematics.set(body.id, body as KinematicBody);
+				(body as KinematicBody).transformations.tick = this._tick;
 				break;
 			case "dynamic":
 				this.dynamics.set(body.id, body as DynamicBody);
+				(body as DynamicBody).transformations.tick = this._tick;
 				break;
 		}
 	}
@@ -229,7 +237,6 @@ export class World {
 				body.supportedBy = -1;
 			}
 		}
-		this.transformationSystem.clearTransformationsForBody(id);
 	}
 
 	deleteController (id: number) {

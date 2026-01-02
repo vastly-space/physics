@@ -69,7 +69,7 @@ function broadphase (body: DynamicBody, staticOctree: Octree, statics: Map<numbe
 	for (const [id, candidate] of kinematics.entries()) {
 		if (body.mask !== 0 && candidate.layer !== 0 && ((body.mask & candidate.layer) === 0)) continue;
 
-		if (body.sweptAABB.overlaps(candidate.sweptAABB)) {
+		if (body.sweptAABB.overlaps(candidate.aabb)) {
 			result.push({
 				body: candidate
 			})
@@ -86,7 +86,7 @@ function broadphase (body: DynamicBody, staticOctree: Octree, statics: Map<numbe
 		}
 	}
 
-	return result;
+	return result.filter(c => c.body.canCollide);
 }
 
 function gatherIntersections (sourceBody: DynamicBody, sourcePosition: Vector3, candidate: CollisionCandidate): FormattedIntersection[] {
@@ -209,8 +209,6 @@ function depenetrate (sourceBody: DynamicBody, resPosition: Vector3, candidates:
 					bestNormal = intersection.data.normal;
 				}
 			}
-
-			if (bestDepth > 100) debugger;
 
 			depPos.set(
 				depPos.x + bestNormal!.x * bestDepth,
@@ -563,6 +561,16 @@ function solve (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<numb
 	AABBPool.reset();
 	VecPool.reset();
 
+	if (!sourceBody.canCollide) {
+		let resPosition = VecPool.alloc().copy(sourceBody.position).add(sourceBody.velocity);
+
+		return {
+			desiredPosition: resPosition,
+			locked: false,
+			events: []
+		}
+	}
+
 	let candidates = broadphase(sourceBody, staticOctree, statics, kinematics, dynamics);
 	let resPosition = VecPool.alloc().copy(sourceBody.position);
 	let velocity = VecPool.alloc().copy(sourceBody.velocity);
@@ -659,7 +667,7 @@ function groundCheckBroadphase (body: DynamicBody, staticOctree: Octree, statics
 		}
 	}
 
-	return result;
+	return result.filter(c => c.body.canCollide);
 }
 
 function groundCheck (sourceBody: DynamicBody, staticOctree: Octree, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>) {
@@ -670,15 +678,27 @@ function groundCheck (sourceBody: DynamicBody, staticOctree: Octree, statics: Ma
 
 	const candidates = groundCheckBroadphase(sourceBody, staticOctree, statics, kinematics, dynamics).filter(c => !c.body.isTrigger);
 
+	let bestDepth: number = -Infinity;
+	let bestNormal: Vector3 | null = null;
+	let bestBody: StaticBody | null = null;
+
 	for (const candidate of candidates) {
-		const intersections = gatherIntersections(sourceBody, sourceBody.position, candidate);
+		const shifted = VecPool.alloc().copy(sourceBody.position);
+		shifted.y -= GROUND_PROBE;
+		const intersections = gatherIntersections(sourceBody, shifted, candidate).filter(i => i.data.normal.y >= MAX_SLOPE);
 
 		for (const intersection of intersections) {
-			if (intersection.data.normal.y >= MAX_SLOPE && intersection.data.normal.y > sourceBody.groundNormal.y) {
-				sourceBody.supportedBy = candidate.body.id;
-				sourceBody.groundNormal = intersection.data.normal;
+			if (intersection.data.depth > bestDepth) {
+				bestDepth = intersection.data.depth;
+				bestBody = candidate.body;
+				bestNormal = intersection.data.normal;
 			}
 		}
+	}
+
+	if (bestBody !== null) {
+		sourceBody.supportedBy = bestBody.id;
+		sourceBody.groundNormal = bestNormal!;
 	}
 }
 
