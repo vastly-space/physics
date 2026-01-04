@@ -27,23 +27,23 @@ export class Transformation {
 		this.endCallback = endCallback;
 		this._loop = loop;
 
-		const duration = endTick - startTick;
+		const duration = endTick - startTick - (data.length-1);
 		const lengths = data.map(v => v.length());
 		const totalLength = lengths.reduce((acc, val) => acc + val, 0);
 		const times = lengths.map(l => Math.floor((l * duration) / totalLength));
 		const remainder = duration - times.reduce((acc, val) => acc + val, 0);
 
 		if (remainder > 0) {
-			const delta = remainder/duration;
+			const delta = (remainder + 1)/(duration + 1);
 			let error = 0;
 
 			for (let i=0; i<times.length; i++) {
 				error += times[i] * delta;
 
 				if (error >= 1) {
-					let diff = Math.floor(error - 1);
+					let diff = error - 1;
 					error = error - diff;
-					times[i] += diff;
+					times[i] += 1;
 				}
 			}
 		}
@@ -51,7 +51,7 @@ export class Transformation {
 		let tick = startTick;
 		for (let i=0; i<data.length; i++) {
 			this.actionData.push(Transformation.buildAction(data[i], tick, times[i] as number));
-			tick += times[i] as number;
+			tick += times[i] as number + 1;
 		}
 	}
 
@@ -91,6 +91,7 @@ export class Transformation {
 
 				if (this.currentTick === action.startTick + action.duration) {
 					this.currentAction++;
+					this.currentTick++;
 				}
 			}
 		}
@@ -113,6 +114,9 @@ export class Transformation {
 
 		for (let i=0; i<this.actionData.length; i++) {
 			this.actionData[i].startTick = tick;
+			this.actionData[i].error[0] = 0;
+			this.actionData[i].error[1] = 0;
+			this.actionData[i].error[2] = 0;
 			tick += this.actionData[i].duration;
 		}
 	}
@@ -149,11 +153,13 @@ export class Transformation {
 	}
 
 	private static calcExtra (index: number, action: ActionData): number {
-		action.error[index] += action.remainder[index] + 1;
+		if (action.remainder[index] === 0) return 0;
+
+		action.error[index] += Math.abs(action.remainder[index]) + 1;
 
 		if (action.error[index] >= action.duration + 1) {
 			action.error[index] -= action.duration + 1;
-			return 1;
+			return Math.sign(action.remainder[index]);
 		} else {
 			return 0;
 		}

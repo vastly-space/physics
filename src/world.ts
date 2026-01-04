@@ -102,7 +102,7 @@ export class World {
 				if (d.supportedBy !== -1) {
 					// we have a platform that carries body
 					if (this.kinematics.has(d.supportedBy)) {
-						envVelocity.add(this.kinematics.get(d.supportedBy)!.motionDelta);
+						envVelocity.addScaled(this.kinematics.get(d.supportedBy)!.motionDelta, 1000/TICKRATE);
 					} else if (this.dynamics.has(d.supportedBy)) {
 						deps[id] = d.supportedBy;
 					}

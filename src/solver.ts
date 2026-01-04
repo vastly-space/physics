@@ -696,7 +696,7 @@ function groundCheck (sourceBody: DynamicBody, staticOctree: Octree, statics: Ma
 		}
 	}
 
-	if (bestBody !== null) {
+	if (bestBody !== null && bestDepth >= GROUND_PROBE) {
 		sourceBody.supportedBy = bestBody.id;
 		sourceBody.groundNormal = bestNormal!;
 	}
