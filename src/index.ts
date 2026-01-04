@@ -27,6 +27,7 @@ import type { ControllerState } from "./controller/controller.js"
 import type { ActionData } from "./transformations/transformation.js"
 import type { ShapeWrapper, Collision } from "./physics/tester.js"
 import type { CollisionEvent } from "./solver.js"
+import type { Impulse } from "./physics/dynamicBody.js"
 
 export type {
 	WorldOptions,
@@ -36,7 +37,8 @@ export type {
 	ActionData,
 	ShapeWrapper,
 	Collision,
-	CollisionEvent
+	CollisionEvent,
+	Impulse
 }
 
 export {

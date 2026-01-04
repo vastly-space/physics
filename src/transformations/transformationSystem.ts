@@ -79,6 +79,10 @@ export default class TransformationSystem {
 		return posVec;
 	}
 
+	get tick (): number {
+		return this._tick;
+	}
+
 	set tick (val: number) {
 		this._tick = val;
 	}

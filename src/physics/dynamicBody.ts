@@ -5,6 +5,13 @@ import { MAX_SLOPE, TICKRATE } from "../constants.js"
 
 import { VecPool } from "../utils/pool.js"
 
+export interface Impulse {
+	direction: Vector3;
+	decay: boolean;
+	startTick: number;
+	endTick: number;
+}
+
 export default class DynamicBody extends KinematicBody {
 	protected readonly _kind: string = "dynamic";
 	protected _supportedBy: number = -1;
@@ -17,6 +24,7 @@ export default class DynamicBody extends KinematicBody {
 	protected _canStepUp: boolean = false;
 	protected _triggerIntersections: Set<number> = new Set();
 	protected _sweptAABB: AABB = new AABB(new Vector3(), new Vector3());
+	protected _impulses: Impulse[] = [];
 
 	get supportedBy (): number {
 		return this._supportedBy;
@@ -68,6 +76,21 @@ export default class DynamicBody extends KinematicBody {
 	get velocity (): Vector3 {
 		const result = VecPool.alloc().copy(this._controllerVelocity).add(this._environmentalVelocity);
 
+		// apply impulses
+		for (const impulse of this._impulses) {
+			if (impulse.decay) {
+				let duration = impulse.endTick - impulse.startTick;
+
+				let decayFactor = duration === 0 ?
+					1 :
+					((impulse.endTick - impulse.startTick)/(this.transformations.tick - impulse.startTick))/(impulse.endTick - impulse.startTick);
+
+				result.addScaled(impulse.direction, decayFactor);
+			} else {
+				result.add(impulse.direction);
+			}
+		}
+
 		if (this._supportedBy !== -1) {
 			if (this._groundNormal.y >= MAX_SLOPE) {
 				// needs clipping
@@ -101,6 +124,7 @@ export default class DynamicBody extends KinematicBody {
 		if (val) {
 			this._prevPos.copy(this._position);
 			this.transformations.clear();
+			this._impulses = [];
 		} else {
 			this._scriptMove = false;
 		}
@@ -141,6 +165,12 @@ export default class DynamicBody extends KinematicBody {
 		}
 	}
 
+	postStep (tick: number) {
+		super.postStep(tick);
+
+		this._impulses = this._impulses.filter(i => i.endTick > tick);
+	}
+
 	set position (val: Vector3) {
 		const diff = VecPool.alloc().copy(val).sub(this._position);
 		this.moveBy(diff);
@@ -148,5 +178,18 @@ export default class DynamicBody extends KinematicBody {
 
 	get position (): Vector3 {
 		return super.position;
+	}
+
+	addImpulse (direction: Vector3, duration: number, decay: boolean) {
+		this._impulses.push({
+			startTick: this.transformations.tick,
+			direction: direction,
+			endTick: this.transformations.tick + duration,
+			decay: decay
+		})
+	}
+
+	clearImpulses () {
+		this._impulses = [];
 	}
 }
