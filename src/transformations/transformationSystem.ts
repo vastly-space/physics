@@ -3,9 +3,10 @@ import { Transformation } from "./transformation.js"
 import type { EndCallback } from "./transformation.js"
 import { TICKRATE } from "../constants.js"
 import { VecPool } from "../utils/pool.js"
+import Scheduler from "../scheduler.js"
 
 export default class TransformationSystem {
-	private _tick: number = 0;
+	private _scheduler!: Scheduler;
 	private bodyPosition: Vector3;
 	private transformations: Map<number, Transformation>= new Map();
 	private counter: number = 0;
@@ -15,7 +16,7 @@ export default class TransformationSystem {
 	}
 
 	add (data: Vector3[], duration: number, endCallback: EndCallback | null = null, relative: boolean = true, loop: boolean = false) {
-		const startTick = this._tick + 1;
+		const startTick = this._scheduler.tick + 1;
 		const endTick = startTick + Math.max(1, Math.round(duration/1000 * TICKRATE));
 		const transformationId = this.counter++;
 
@@ -74,16 +75,14 @@ export default class TransformationSystem {
 			if (cb !== null) cb();
 		}
 
-		this._tick = currentTick;
-
 		return posVec;
 	}
 
 	get tick (): number {
-		return this._tick;
+		return this._scheduler.tick;
 	}
 
-	set tick (val: number) {
-		this._tick = val;
+	set scheduler (val: Scheduler) {
+		this._scheduler = val;
 	}
 }

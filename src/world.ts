@@ -10,13 +10,15 @@ import { generateDirectionsTable } from "./controller/directionsTable.js"
 import { solve, groundCheck } from "./solver.js"
 import type { SolveResult } from "./solver.js"
 import { VecPool } from "./utils/pool.js"
+import Scheduler from "./scheduler.js"
 import { TICKRATE, GLOBAL_GRAVITY, MAX_DOWN_SPEED, STEP_UP_HEIGHT } from "./constants.js"
 
 const MaxWorldBox = 2147483647 * 2;
 
 export interface WorldOptions {
 	worldCubeSize?: number;
-	networking: "host" | "client" | "standalone";
+	mode: "server" | "client" | "standalone";
+	tick: number;
 }
 
 type Body = StaticBody | KinematicBody | DynamicBody;
@@ -42,13 +44,12 @@ export class World {
 	}
 
 	private bodyCounter: number = 0;
-	private _tick: number = 0;
 	private statics: Map<number, StaticBody> = new Map();
 	private octree: Octree;
 	private kinematics: Map<number, KinematicBody> = new Map();
 	private dynamics: Map<number, DynamicBody> = new Map();
 	private controllers: Map<number, Controller> = new Map();
-	private networking: string;
+	public scheduler: Scheduler;
 
 	constructor (options: WorldOptions) {
 		generateDirectionsTable();
@@ -60,34 +61,28 @@ export class World {
 			new Vector3(-halfSize, -halfSize, -halfSize),
 			new Vector3(halfSize, halfSize, halfSize)
 		));
-		this.networking = options.networking;
+		this.scheduler = new Scheduler(options.mode, options.tick);
+
+		this.scheduler.tickListener = this.step.bind(this);
 	}
 
 	get tick (): number {
-		return this._tick;
+		return this.scheduler.tick;
 	}
 
 	set tick (val: number) {
-		this._tick = val;
-		for (const [id, b] of this.kinematics) {
-			b.transformations.tick = val;
-		}
-		for (const [id, b] of this.dynamics) {
-			b.transformations.tick = val;
-		}
+		this.scheduler.tick = val;
 	}
 
 	step (): TickEvent[] {
-		this._tick++;
-
 		for (const [id, k] of this.kinematics.entries()) {
-			k.scriptPos = k.transformations.step(this._tick);
+			k.scriptPos = k.transformations.step(this.scheduler.tick);
 			k.preStep();
 		}
 
 		for (const [id, d] of this.dynamics.entries()) {
 			if (d.kinematicBehavior) {
-				d.scriptPos = d.transformations.step(this._tick);
+				d.scriptPos = d.transformations.step(this.scheduler.tick);
 				d.preStep();
 			}
 		}
@@ -98,7 +93,7 @@ export class World {
 			let envVelocity = VecPool.alloc().set(0, 0, 0);
 			// update environmental speed
 			if (!d.kinematicBehavior) {
-				d.transformations.step(this._tick);
+				d.transformations.step(this.scheduler.tick);
 				if (d.supportedBy !== -1) {
 					// we have a platform that carries body
 					if (this.kinematics.has(d.supportedBy)) {
@@ -192,8 +187,8 @@ export class World {
 			}
 		}
 
-		for (const k of this.kinematics.values()) k.postStep(this.tick);
-	    for (const dyn of this.dynamics.values()) dyn.postStep(this.tick);
+		for (const k of this.kinematics.values()) k.postStep(this.scheduler.tick);
+	    for (const dyn of this.dynamics.values()) dyn.postStep(this.scheduler.tick);
 
 	    // ground check
     	for (const [id, d] of this.dynamics.entries()) {
@@ -211,11 +206,11 @@ export class World {
 				break;
 			case "kinematic":
 				this.kinematics.set(body.id, body as KinematicBody);
-				(body as KinematicBody).transformations.tick = this._tick;
+				(body as KinematicBody).transformations.scheduler = this.scheduler;
 				break;
 			case "dynamic":
 				this.dynamics.set(body.id, body as DynamicBody);
-				(body as DynamicBody).transformations.tick = this._tick;
+				(body as DynamicBody).transformations.scheduler = this.scheduler;
 				break;
 		}
 	}
