@@ -18,6 +18,7 @@ export default class DynamicBody extends KinematicBody {
 	protected _groundNormal: Vector3 = new Vector3();
 	protected _controllerVelocity: Vector3 = new Vector3();
 	protected _environmentalVelocity: Vector3 = new Vector3();
+	protected _velocity: Vector3 = new Vector3();
 	protected _kinematicBehavior: boolean = false;
 	protected _mask: number = 0;
 	protected _gravityMultiplier: number = 1;
@@ -32,7 +33,7 @@ export default class DynamicBody extends KinematicBody {
 
 	set supportedBy (val: number) {
 		this._supportedBy = val;
-		if (val === -1) {
+		if (val === null) {
 			this._groundNormal.set(0, 0, 0);
 		}
 	}
@@ -74,44 +75,7 @@ export default class DynamicBody extends KinematicBody {
 	}
 
 	get velocity (): Vector3 {
-		const result = VecPool.alloc().copy(this._controllerVelocity).add(this._environmentalVelocity);
-
-		// apply impulses
-		for (const impulse of this._impulses) {
-			if (impulse.decay) {
-				let duration = impulse.endTick - impulse.startTick;
-
-				let decayFactor = duration === 0 ?
-					1 :
-					((impulse.endTick - impulse.startTick)/(this.transformations.tick - impulse.startTick))/(impulse.endTick - impulse.startTick);
-
-				result.addScaled(impulse.direction, decayFactor);
-			} else {
-				result.add(impulse.direction);
-			}
-		}
-
-		if (this._supportedBy !== -1) {
-			if (this._groundNormal.y >= MAX_SLOPE) {
-				// needs clipping
-				let slopeFactor = (this.groundNormal.y - MAX_SLOPE)/(1 - MAX_SLOPE);
-				slopeFactor = Math.min(1, slopeFactor);
-				slopeFactor = Math.max(0, slopeFactor);
-
-				const vDot = result.dot(this._groundNormal);
-				const vNormal = VecPool.alloc().copy(this._groundNormal);
-				vNormal.x *= vDot;
-				vNormal.y *= vDot;
-				vNormal.z *= vDot;
-				result.sub(vNormal);
-
-				if (vDot > 0) {
-					result.add(vNormal);
-				}
-			}
-		}
-		
-		return result;
+		return this._velocity;
 	}
 
 	get kinematicBehavior (): boolean {
@@ -159,7 +123,23 @@ export default class DynamicBody extends KinematicBody {
 		if (this._kinematicBehavior) {
 			super.preStep();
 		} else {
-			const tickV = this.velocity.scale(TICKRATE/1000);
+			this._velocity.copy(this._controllerVelocity).add(this._environmentalVelocity);
+
+			for (const impulse of this._impulses) {
+				if (impulse.decay) {
+					let duration = impulse.endTick - impulse.startTick;
+
+					let decayFactor = duration === 0 ?
+						1 :
+						((impulse.endTick - impulse.startTick)/(this.transformations.tick - impulse.startTick))/(impulse.endTick - impulse.startTick);
+
+					this._velocity.addScaled(impulse.direction, decayFactor);
+				} else {
+					this._velocity.add(impulse.direction);
+				}
+			}
+
+			const tickV = VecPool.alloc().copy(this.velocity).scale(TICKRATE/1000);
 
 			this._sweptAABB.copy(this._aabb).sweep(tickV);
 		}

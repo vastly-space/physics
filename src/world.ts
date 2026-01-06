@@ -44,10 +44,12 @@ export class World {
 	}
 
 	private bodyCounter: number = 0;
+	private localBodyCounter: number = -1;
 	private statics: Map<number, StaticBody> = new Map();
 	private octree: Octree;
 	private kinematics: Map<number, KinematicBody> = new Map();
 	private dynamics: Map<number, DynamicBody> = new Map();
+	private locals: Map<number, DynamicBody> = new Map();
 	private controllers: Map<number, Controller> = new Map();
 	public scheduler: Scheduler;
 
@@ -80,20 +82,14 @@ export class World {
 			k.preStep();
 		}
 
-		for (const [id, d] of this.dynamics.entries()) {
-			if (d.kinematicBehavior) {
-				d.scriptPos = d.transformations.step(this.scheduler.tick);
-				d.preStep();
-			}
-		}
-
 		let deps: Record<number, number> = {};
 
 		for (const [id, d] of this.dynamics.entries()) {
 			let envVelocity = VecPool.alloc().set(0, 0, 0);
 			// update environmental speed
+			d.transformations.step(this.scheduler.tick);
+			d.preStep();
 			if (!d.kinematicBehavior) {
-				d.transformations.step(this.scheduler.tick);
 				if (d.supportedBy !== -1) {
 					// we have a platform that carries body
 					if (this.kinematics.has(d.supportedBy)) {
@@ -102,9 +98,11 @@ export class World {
 						deps[id] = d.supportedBy;
 					}
 				} else {
-					envVelocity.y = d.environmentalVelocity.y - (((GLOBAL_GRAVITY/TICKRATE) * d.gravityMultiplier) | 0);
+					if (d.gravityMultiplier !== 0) {
+						envVelocity.y = d.environmentalVelocity.y - (((GLOBAL_GRAVITY/TICKRATE) * d.gravityMultiplier) | 0);
 
-					if (envVelocity.y < MAX_DOWN_SPEED) envVelocity.y = MAX_DOWN_SPEED;
+						if (envVelocity.y < MAX_DOWN_SPEED) envVelocity.y = MAX_DOWN_SPEED;
+					}
 				}
 			}
 
@@ -187,11 +185,86 @@ export class World {
 			}
 		}
 
+		// local bodies
+		for (const [id, d] of this.locals.entries()) {
+			let envVelocity = VecPool.alloc().set(0, 0, 0);
+			// update environmental speed
+			d.transformations.step(this.scheduler.tick);
+			d.preStep();
+			if (!d.kinematicBehavior) {
+				if (d.supportedBy !== -1) {
+					// we have a platform that carries body
+					if (this.kinematics.has(d.supportedBy)) {
+						envVelocity.addScaled(this.kinematics.get(d.supportedBy)!.motionDelta, 1000/TICKRATE);
+					} else if (this.dynamics.has(d.supportedBy)) {
+						envVelocity.add(d.velocity);
+					}
+				} else {
+					if (d.gravityMultiplier !== 0) {
+						envVelocity.y = d.environmentalVelocity.y - (((GLOBAL_GRAVITY/TICKRATE) * d.gravityMultiplier) | 0);
+
+						if (envVelocity.y < MAX_DOWN_SPEED) envVelocity.y = MAX_DOWN_SPEED;
+					}
+				}
+			}
+
+			d.environmentalVelocity = envVelocity;
+		}
+
+		for (const [id, d] of this.locals.entries()) {
+			d.preStep();
+
+			const tickResult = solve(d, this.octree, this.statics, this.kinematics, this.dynamics);
+
+			d.position = tickResult.desiredPosition;
+
+			const prevTriggers = new Set(d.triggerIntersections);
+			d.triggerIntersections.clear();
+
+			for (const ev of tickResult.events) {
+				if (ev.trigger) {
+					if (!prevTriggers.has(ev.body2.id)) {
+						tickEvents.push({
+							type: World.rTickEventTypes.triggerEnter,
+							body1: ev.body1,
+							body2: ev.body2
+						});
+					} else {
+						prevTriggers.delete(ev.body2.id);
+					}
+					d.triggerIntersections.add(ev.body2.id);
+				} else {
+					tickEvents.push({
+						type: World.rTickEventTypes.collide,
+						body1: ev.body1,
+						body2: ev.body2
+					});
+				}
+			}
+
+			for (const id of prevTriggers) {
+				const triggerBody = this.statics.get(id) || this.kinematics.get(id);
+
+				if (triggerBody !== undefined) {
+					tickEvents.push({
+						type: World.rTickEventTypes.triggerExit,
+						body1: d,
+						body2: triggerBody!
+					});
+				}
+			}
+		}
+
 		for (const k of this.kinematics.values()) k.postStep(this.scheduler.tick);
 	    for (const dyn of this.dynamics.values()) dyn.postStep(this.scheduler.tick);
+	    for (const loc of this.locals.values()) loc.postStep(this.scheduler.tick);
 
 	    // ground check
     	for (const [id, d] of this.dynamics.entries()) {
+	    	groundCheck(d, this.octree, this.statics, this.kinematics, this.dynamics);
+	    }
+
+	    for (const [id, d] of this.locals.entries()) {
 	    	groundCheck(d, this.octree, this.statics, this.kinematics, this.dynamics);
 	    }
 
@@ -234,6 +307,14 @@ export class World {
 		}
 	}
 
+	addLocalBody (body: DynamicBody) {
+		this.locals.set(body.id, body);
+	}
+
+	deleteLocalBody (id: number) {
+		this.locals.delete(id);
+	}
+
 	deleteController (id: number) {
 		this.controllers.delete(id);
 	}
@@ -244,6 +325,10 @@ export class World {
 
 	get nextBodyId (): number {
 		return this.bodyCounter++;
+	}
+
+	get nextLocalBodyId (): number {
+		return this.localBodyCounter--;
 	}
 
 	raycast (from: Vector3, to:Vector3, distance: number = 0): StaticBody | null {
