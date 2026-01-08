@@ -17,7 +17,6 @@ const MaxWorldBox = 2147483647 * 2;
 
 export interface WorldOptions {
 	worldCubeSize?: number;
-	mode: "server" | "client" | "standalone";
 	tick: number;
 }
 
@@ -53,7 +52,7 @@ export class World {
 	private controllers: Map<number, Controller> = new Map();
 	public scheduler: Scheduler;
 
-	constructor (options: WorldOptions) {
+	constructor (options: WorldOptions, scheduler: Scheduler | null = null) {
 		generateDirectionsTable();
 
 		if (options.worldCubeSize !== undefined && options.worldCubeSize > MaxWorldBox) throw new Error("World cube size extending the limit");
@@ -63,9 +62,14 @@ export class World {
 			new Vector3(-halfSize, -halfSize, -halfSize),
 			new Vector3(halfSize, halfSize, halfSize)
 		));
-		this.scheduler = new Scheduler(options.mode, options.tick);
 
-		this.scheduler.tickListener = this.step.bind(this);
+		if (scheduler !== null) {
+			this.scheduler = scheduler;
+		} else {
+			this.scheduler = new Scheduler(options.tick);
+
+			this.scheduler.tickListener = this.step.bind(this);
+		}
 	}
 
 	get tick (): number {
@@ -99,7 +103,7 @@ export class World {
 					}
 				} else {
 					if (d.gravityMultiplier !== 0) {
-						envVelocity.y = d.environmentalVelocity.y - (((GLOBAL_GRAVITY/TICKRATE) * d.gravityMultiplier) | 0);
+						envVelocity.y = d.environmentalVelocity.y - (((GLOBAL_GRAVITY/TICKRATE) * (d.gravityMultiplier/255)) | 0);
 
 						if (envVelocity.y < MAX_DOWN_SPEED) envVelocity.y = MAX_DOWN_SPEED;
 					}
@@ -185,7 +189,9 @@ export class World {
 			}
 		}
 
-		// local bodies
+		/*
+			LOCAL BODIES
+		*/
 		for (const [id, d] of this.locals.entries()) {
 			let envVelocity = VecPool.alloc().set(0, 0, 0);
 			// update environmental speed
@@ -201,7 +207,7 @@ export class World {
 					}
 				} else {
 					if (d.gravityMultiplier !== 0) {
-						envVelocity.y = d.environmentalVelocity.y - (((GLOBAL_GRAVITY/TICKRATE) * d.gravityMultiplier) | 0);
+						envVelocity.y = d.environmentalVelocity.y - (((GLOBAL_GRAVITY/TICKRATE) * (d.gravityMultiplier/255)) | 0);
 
 						if (envVelocity.y < MAX_DOWN_SPEED) envVelocity.y = MAX_DOWN_SPEED;
 					}
@@ -268,7 +274,56 @@ export class World {
 	    	groundCheck(d, this.octree, this.statics, this.kinematics, this.dynamics);
 	    }
 
+	    this.clampCoordinates();
+
 		return tickEvents;
+	}
+
+	clampCoordinates () {
+		for (const [id, k] of this.kinematics.entries()) {
+			const kPos = k.position;
+
+			if (kPos.x > MaxWorldBox || kPos.x < -MaxWorldBox ||
+				kPos.y > MaxWorldBox || kPos.y < -MaxWorldBox ||
+				kPos.z > MaxWorldBox || kPos.z < -MaxWorldBox) {
+
+				kPos.x = Math.min(MaxWorldBox, Math.max(-MaxWorldBox, kPos.x));
+				kPos.y = Math.min(MaxWorldBox, Math.max(-MaxWorldBox, kPos.y));
+				kPos.z = Math.min(MaxWorldBox, Math.max(-MaxWorldBox, kPos.z));
+
+				k.position = kPos;
+			}
+		}
+
+		for (const [id, d] of this.dynamics.entries()) {
+			const dPos = d.position;
+
+			if (dPos.x > MaxWorldBox || dPos.x < -MaxWorldBox ||
+				dPos.y > MaxWorldBox || dPos.y < -MaxWorldBox ||
+				dPos.z > MaxWorldBox || dPos.z < -MaxWorldBox) {
+
+				dPos.x = Math.min(MaxWorldBox, Math.max(-MaxWorldBox, dPos.x));
+				dPos.y = Math.min(MaxWorldBox, Math.max(-MaxWorldBox, dPos.y));
+				dPos.z = Math.min(MaxWorldBox, Math.max(-MaxWorldBox, dPos.z));
+
+				d.position = dPos;
+			}
+		}
+
+		for (const [id, d] of this.locals.entries()) {
+			const dPos = d.position;
+
+			if (dPos.x > MaxWorldBox || dPos.x < -MaxWorldBox ||
+				dPos.y > MaxWorldBox || dPos.y < -MaxWorldBox ||
+				dPos.z > MaxWorldBox || dPos.z < -MaxWorldBox) {
+
+				dPos.x = Math.min(MaxWorldBox, Math.max(-MaxWorldBox, dPos.x));
+				dPos.y = Math.min(MaxWorldBox, Math.max(-MaxWorldBox, dPos.y));
+				dPos.z = Math.min(MaxWorldBox, Math.max(-MaxWorldBox, dPos.z));
+
+				d.position = dPos;
+			}
+		}
 	}
 
 	addBody (body: Body) {

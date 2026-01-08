@@ -21,6 +21,11 @@ import { MAX_DEPENETRATION_ITERATIONS, STEP_UP_HEIGHT, TICKRATE, GROUND_PROBE, M
 
 const CEILING_COS = -0.8;
 const SLOP = 5;
+let SLOPE_FLOAT = Math.cos(MAX_SLOPE * Math.PI/180);
+
+export function recalcSlope () {
+	SLOPE_FLOAT = Math.cos(MAX_SLOPE * Math.PI/180);
+}
 
 interface CollisionCandidate {
 	body: StaticBody | KinematicBody | DynamicBody;
@@ -105,7 +110,7 @@ function gatherIntersections (sourceBody: DynamicBody, sourcePosition: Vector3, 
 						candidate: candidate,
 						data: data
 					});
-				} else if (data.normal.y >= MAX_SLOPE) {
+				} else if (data.normal.y >= SLOPE_FLOAT) {
 					intersections.push({
 						type: "ground",
 						candidate: candidate,
@@ -138,7 +143,7 @@ function gatherIntersections (sourceBody: DynamicBody, sourcePosition: Vector3, 
 							candidate: candidate,
 							data: data
 						});
-					} else if (data.normal.y >= MAX_SLOPE) {
+					} else if (data.normal.y >= SLOPE_FLOAT) {
 						intersections.push({
 							type: "ground",
 							candidate: candidate,
@@ -290,7 +295,7 @@ function moveCCD (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vecto
 					} else if (Math.abs(lRes.normal.dot(intentVelocity)) < 1e-8 && (collision === null || lRes.t < collision.t)) {
 						collision = lRes;
 						collisionBody = candidate.body;
-						clippedXZ = lRes.normal!.y <= MAX_SLOPE;
+						clippedXZ = lRes.normal!.y <= SLOPE_FLOAT;
 						clipped = true;
 					}
 				}
@@ -331,7 +336,7 @@ function moveCCD (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vecto
 						} else if (Math.abs(lRes.normal.dot(intentVelocity)) < 1e-8 && (collision === null || lRes.t < collision.t)) {
 							collision = lRes;
 							collisionBody = candidate.body;
-							clippedXZ = lRes.normal!.y <= MAX_SLOPE;
+							clippedXZ = lRes.normal!.y <= SLOPE_FLOAT;
 							clipped = true;
 						}
 					}
@@ -445,7 +450,7 @@ function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Ve
 					}
 				}
 
-				clippedXZ = bestNormal!.y <= MAX_SLOPE;
+				clippedXZ = bestNormal!.y <= SLOPE_FLOAT;
 
 				const mtv = VecPool.alloc().copy(bestNormal!).scale(bestDepth);
 				mtv.y = 0;
@@ -685,7 +690,7 @@ function groundCheck (sourceBody: DynamicBody, staticOctree: Octree, statics: Ma
 	for (const candidate of candidates) {
 		const shifted = VecPool.alloc().copy(sourceBody.position);
 		shifted.y -= GROUND_PROBE;
-		const intersections = gatherIntersections(sourceBody, shifted, candidate).filter(i => i.data.normal.y >= MAX_SLOPE);
+		const intersections = gatherIntersections(sourceBody, shifted, candidate).filter(i => i.data.normal.y >= SLOPE_FLOAT);
 
 		for (const intersection of intersections) {
 			if (intersection.data.depth > bestDepth) {

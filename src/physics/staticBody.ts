@@ -5,7 +5,7 @@ import type { OctItem } from "../math/octree.js"
 import type Shape from "./shape.js"
 import Trimesh from "./shapes/trimesh.js"
 
-export type CalculationMode = 'SIMULATE' | 'SNAPSHOT';
+export type CalculationMode = 'SIMULATE' | 'SNAPSHOT' | 'EXTRAPOLATE';
 
 export default class StaticBody {
 	protected readonly _kind: string = "static";
@@ -20,6 +20,7 @@ export default class StaticBody {
 	protected _canCollide: boolean = true;
 	protected _layer: number;
 	public mode: CalculationMode = 'SIMULATE';
+	public dirty: boolean = false;
 
 	constructor (id: number, shapes: Shape[], position: Vector3, isTrigger: boolean, layer: number = 0) {
 		this._id = id;

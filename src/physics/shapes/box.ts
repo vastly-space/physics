@@ -8,9 +8,9 @@ import { VecPool } from "../../utils/pool.js"
 export default class Box implements Shape {
 	public readonly type: string = "box";
 	public readonly offset: Vector3;
-	private readonly width: number;
-	private readonly height: number;
-	private readonly depth: number;
+	public readonly width: number;
+	public readonly height: number;
+	public readonly depth: number;
 	public readonly aabb: AABB;
 
 	constructor (offset: Vector3, width: number, height: number, depth: number) {

@@ -9,11 +9,16 @@ export default class Trimesh implements Shape {
 	public readonly offset: Vector3;
 	public readonly aabb: AABB;
 	public readonly triangles: Triangle[];
+	public readonly vertices: Int32Array;
+	public readonly indices: Uint32Array;
 
 	constructor (offset: Vector3, vertices: Int32Array | number[], indices: Uint32Array | number[]) {
 		this.offset = offset;
 		const v = vertices instanceof Int32Array ? vertices : Int32Array.from(vertices);
 	    const i = indices  instanceof Uint32Array ? indices  : Uint32Array.from(indices);
+
+	    this.vertices = v;
+	    this.indices = i;
 
 	    if (v.length % 3 !== 0) throw new Error("Trimesh: vertices length must be multiple of 3");
 	    if (i.length % 3 !== 0) throw new Error("Trimesh: indices length must be multiple of 3");

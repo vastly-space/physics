@@ -1,7 +1,7 @@
 import Vector3 from "../math/vector3.js"
 import AABB from "../math/aabb.js"
 import KinematicBody from "./kinematicBody.js"
-import { MAX_SLOPE, TICKRATE } from "../constants.js"
+import { TICKRATE } from "../constants.js"
 
 import { VecPool } from "../utils/pool.js"
 
@@ -21,7 +21,7 @@ export default class DynamicBody extends KinematicBody {
 	protected _velocity: Vector3 = new Vector3();
 	protected _kinematicBehavior: boolean = false;
 	protected _mask: number = 0;
-	protected _gravityMultiplier: number = 1;
+	protected _gravityMultiplier: number = 255;
 	protected _canStepUp: boolean = false;
 	protected _triggerIntersections: Set<number> = new Set();
 	protected _sweptAABB: AABB = new AABB(new Vector3(), new Vector3());
@@ -114,11 +114,6 @@ export default class DynamicBody extends KinematicBody {
 		return this._sweptAABB;
 	}
 
-	moveBy (vec: Vector3) {
-		this._position.add(vec);
-		this._aabb.translate(vec);
-	}
-
 	preStep () {
 		if (this._kinematicBehavior) {
 			super.preStep();
@@ -139,6 +134,8 @@ export default class DynamicBody extends KinematicBody {
 				}
 			}
 
+			if (!this._velocity.isZero()) this.dirty = true;
+
 			const tickV = VecPool.alloc().copy(this.velocity).scale(TICKRATE/1000);
 
 			this._sweptAABB.copy(this._aabb).sweep(tickV);
@@ -151,13 +148,12 @@ export default class DynamicBody extends KinematicBody {
 		this._impulses = this._impulses.filter(i => i.endTick > tick);
 	}
 
-	set position (val: Vector3) {
-		const diff = VecPool.alloc().copy(val).sub(this._position);
-		this.moveBy(diff);
-	}
-
 	get position (): Vector3 {
 		return super.position;
+	}
+
+	set position (val: Vector3) {
+		super.position = val;
 	}
 
 	addImpulse (direction: Vector3, duration: number, decay: boolean) {

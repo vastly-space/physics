@@ -2,6 +2,8 @@ import Vector3 from "../math/vector3.js"
 import AABB from "../math/aabb.js"
 import StaticBody from "./staticBody.js"
 
+import { VecPool } from "../utils/pool.js"
+
 import TransformationSystem from "../transformations/transformationSystem.js"
 
 export default class KinematicBody extends StaticBody {
@@ -12,8 +14,18 @@ export default class KinematicBody extends StaticBody {
 	protected _motionDelta: Vector3 = new Vector3();
 	public transformations: TransformationSystem = new TransformationSystem(this.position);
 
+	moveBy (vec: Vector3) {
+		this._position.add(vec);
+		this._aabb.translate(vec);
+	}
+
 	get position (): Vector3 {
 		return super.position;
+	}
+
+	set position (val: Vector3) {
+		const diff = VecPool.alloc().copy(val).sub(this._position);
+		this.moveBy(diff);
 	}
 
 	get scriptMove (): boolean {
@@ -39,6 +51,7 @@ export default class KinematicBody extends StaticBody {
 			return;
 		}
 
+		this.dirty = true;
 		this._prevPos.copy(this._position);
 		this._motionDelta.copy(this._scriptPos).sub(this._prevPos);
 		this._position.copy(this._scriptPos);
@@ -46,8 +59,6 @@ export default class KinematicBody extends StaticBody {
 	}
 
 	postStep (tick: number) {
-		this._anchorTick = tick;
-	    this._anchorPos.copy(this._position);
 		this._scriptMove = false;
 	}
 }
