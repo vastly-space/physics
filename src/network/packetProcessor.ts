@@ -285,13 +285,13 @@ export default class PacketProcessor {
 				const vertexLength = view.getInt32(offset, true);
 				offset += 4;
 				const vertices = new Int32Array(view.buffer.slice(
-					offset, vertexLength
+					view.byteOffset + offset, view.byteOffset + offset + vertexLength*4
 				));
-				offset += vertexLength;
+				offset += vertexLength*4;
 				const indiceLength = view.getInt32(offset, true);
 				offset += 4;
 				const indices = new Uint32Array(view.buffer.slice(
-					offset, indiceLength
+					view.byteOffset + offset, view.byteOffset + offset + indiceLength*4
 				));
 
 				return new Trimesh(position, vertices, indices);
@@ -338,6 +338,7 @@ export default class PacketProcessor {
 				view.byteOffset + offset,
 				shapeSize
 			)));
+			offset += shapeSize;
 		}
 
 		// construct body
