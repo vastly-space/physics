@@ -419,20 +419,94 @@ export default class PacketProcessor {
 		}
 	}
 
-	static serializeBodySnapshot (): Uint8Array {
-		return new Uint8Array();
-	}
+	static serializeSnapshot (tick: number, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): Uint8Array[] {
+		/*
+			single body is 28 bytes
+			snapshot chunk can hold 1200 bytes
+			for bodies it can hold 1200 - 4 - 2 - 2 = 1192
+			42 bodies in a chunk
+		*/
+		const result: { view: DataView, chunk: Uint8Array }[] = [];
+		const bodies: Body[] = Array.from(kinematics.values()).concat(Array.from(dynamics.values()));
 
-	static serializeSnapshot (tick: number, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): Uint8Array[] {
-		return [];
+		let counter = 0;
+		while (counter < bodies.length) {
+			let bodiesInChunk = Math.min(42, bodies.length - counter);
+			let chunk = new Uint8Array(8 + bodiesInChunk*28);
+			let view = new DataView(chunk.buffer);
+
+			let offset = 8;
+
+			for (let i=0; i<bodiesInChunk; i++) {
+				// id
+				view.setInt32(offset, bodies[counter + i].id, true);
+				offset += 4;
+				// position
+				view.setInt32(offset, bodies[counter + i].position.x, true);
+				offset += 4;
+				view.setInt32(offset, bodies[counter + i].position.y, true);
+				offset += 4;
+				view.setInt32(offset, bodies[counter + i].position.z, true);
+				offset += 4;
+				// velocity
+				let vel: Vector3;
+				if (bodies[counter + i].kind === "dynamic") {
+					vel = (bodies[counter + i] as DynamicBody).velocity;
+				} else {
+					vel = (bodies[counter + i] as KinematicBody).motionDelta;
+				}
+				view.setInt32(offset, vel.x, true);
+				offset += 4;
+				view.setInt32(offset, vel.y, true);
+				offset += 4;
+				view.setInt32(offset, vel.z, true);
+				offset += 4;
+			}
+
+			result.push({ view, chunk });
+		}
+
+		for (let i=0; i<result.length; i++) {
+			const chunk = result[i];
+			chunk.view.setInt32(0, tick, true);
+			chunk.view.setInt16(4, result.length, true);
+			chunk.view.setInt16(6, i, true);
+		}
+
+		return result.map(c => c.chunk);
 	}
 
 	static deserializeSnapshot (data: Uint8Array): Snapshot {
+		const view = new DataView(data.buffer);
+
+		const tick = view.getInt32(0, true);
+		const chunks = view.getInt16(4, true);
+		const chunkIndex = view.getInt16(6, true);
+
+		const bodies: BodyState[] = [];
+		let offset = 8;
+
+		while (offset < view.byteLength) {
+			const id = view.getInt32(offset, true);
+			const position = [
+				view.getInt32(offset + 4, true),
+				view.getInt32(offset + 8, true),
+				view.getInt32(offset + 12, true)
+			];
+			const velocity = [
+				view.getInt32(offset + 16, true),
+				view.getInt32(offset + 20, true),
+				view.getInt32(offset + 24, true)
+			];
+			bodies.push({ id, position, velocity });
+			offset += 28;
+		}
+
 		return {
-			tick: 42,
-			chunks: 42,
-			chunkIndex: 42,
-			bodies: []
+			tick,
+			chunks,
+			chunkIndex,
+			bodies
 		}
 	}
 }
