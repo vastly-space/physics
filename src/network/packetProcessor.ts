@@ -11,6 +11,8 @@ import {
 	SNAPSHOT_INTERVAL,
 	SCHEDULER_TRAIL_SNAP,
 	SCHEDULER_TRAIL_BOOST,
+	MAX_INTERPOLATION_TICKS,
+	CLIENT_DELAY,
 
 	SET_GLOBAL_SPEED,
 	SET_MAX_DOWN_SPEED,
@@ -23,7 +25,9 @@ import {
 	SET_NUM_DIRECTIONS,
 	SET_SNAPSHOT_INTERVAL,
 	SET_SCHEDULER_TRAIL_SNAP,
-	SET_SCHEDULER_TRAIL_BOOST
+	SET_SCHEDULER_TRAIL_BOOST,
+	SET_MAX_INTERPOLATION_TICKS,
+	SET_CLIENT_DELAY
 } from "../constants.js"
 
 import StaticBody from "../physics/staticBody.js"
@@ -59,18 +63,18 @@ interface BodyDescription {
 	shapes: ShapeDescription[];
 }
 
-interface InitialPacket {
+export interface InitialPacket {
 	tick: number;
 	bodies: Body[];
 }
 
-interface BodyState {
+export interface BodyState {
 	id: number;
 	position: number[];
 	velocity: number[];
 }
 
-interface Snapshot {
+export interface SnapshotChunk {
 	tick: number;
 	chunks: number;
 	chunkIndex: number;
@@ -182,6 +186,8 @@ export default class PacketProcessor {
 		constants.push(SNAPSHOT_INTERVAL);
 		constants.push(SCHEDULER_TRAIL_SNAP);
 		constants.push(SCHEDULER_TRAIL_BOOST);
+		constants.push(MAX_INTERPOLATION_TICKS);
+		constants.push(CLIENT_DELAY);
 
 		// tick
 		constants.push(tick);
@@ -396,6 +402,10 @@ export default class PacketProcessor {
 		offset += 4;
 		SET_SCHEDULER_TRAIL_BOOST(view.getInt32(offset, true));
 		offset += 4;
+		SET_MAX_INTERPOLATION_TICKS(view.getInt32(offset, true));
+		offset += 4;
+		SET_CLIENT_DELAY(view.getInt32(offset, true));
+		offset += 4;
 
 		const tick = view.getInt32(offset, true);
 		offset += 4;
@@ -476,7 +486,7 @@ export default class PacketProcessor {
 		return result.map(c => c.chunk);
 	}
 
-	static deserializeSnapshot (data: Uint8Array): Snapshot {
+	static deserializeSnapshot (data: Uint8Array): SnapshotChunk {
 		const view = new DataView(data.buffer);
 
 		const tick = view.getInt32(0, true);

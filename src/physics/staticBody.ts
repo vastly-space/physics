@@ -5,7 +5,7 @@ import type { OctItem } from "../math/octree.js"
 import type Shape from "./shape.js"
 import Trimesh from "./shapes/trimesh.js"
 
-export type CalculationMode = 'SIMULATE' | 'SNAPSHOT' | 'EXTRAPOLATE';
+export type CalculationMode = 'SIMULATE' | 'SNAPSHOT';
 
 export default class StaticBody {
 	protected readonly _kind: string = "static";
@@ -13,13 +13,16 @@ export default class StaticBody {
 	private _id: number;
 	protected _position: Vector3;
 	protected _anchorPos: Vector3;
+	protected _anchorVelocity: Vector3;
 	protected _anchorTick: number;
+	protected _prevPos: Vector3;
+	protected _prevTick: number;
 	protected _aabb: AABB;
 	protected _shapes: Shape[];
 	protected _isTrigger: boolean;
 	protected _canCollide: boolean = true;
 	protected _layer: number;
-	public mode: CalculationMode = 'SIMULATE';
+	public _mode: CalculationMode = 'SIMULATE';
 	public dirty: boolean = false;
 
 	constructor (id: number, shapes: Shape[], position: Vector3, isTrigger: boolean, layer: number = 0) {
@@ -27,7 +30,10 @@ export default class StaticBody {
 		this._shapes = shapes;
 		this._position = position.clone();
 		this._anchorPos = position.clone();
+		this._prevPos = position.clone();
+		this._anchorVelocity = new Vector3();
 		this._anchorTick = 0;
+		this._prevTick = 0;
 		this._aabb = new AABB(new Vector3(), new Vector3());
 		this._isTrigger = isTrigger;
 		this._layer = layer;
@@ -49,10 +55,6 @@ export default class StaticBody {
 
 	get position (): Vector3 {
 		return this._position;
-	}
-
-	get anchorPos (): Vector3 {
-		return this._anchorPos;
 	}
 
 	get aabb (): AABB {
@@ -89,6 +91,46 @@ export default class StaticBody {
 
 	set anchorTick (val: number) {
 		this._anchorTick = val;
+	}
+
+	get prevTick (): number {
+		return this._prevTick;
+	}
+
+	set prevTick (val: number) {
+		this._prevTick = val;
+	}
+
+	get anchorPos (): Vector3 {
+		return this._anchorPos;
+	}
+
+	set anchorPos (val: Vector3) {
+		this._anchorPos.copy(val);
+	}
+
+	get prevPos (): Vector3 {
+		return this._prevPos;
+	}
+
+	set prevPos (val: Vector3) {
+		this._prevPos.copy(val);
+	}
+
+	get anchorVelocity (): Vector3 {
+		return this._anchorVelocity;
+	}
+
+	set anchorVelocity (val: Vector3) {
+		this._anchorVelocity.copy(val);
+	}
+
+	get mode (): CalculationMode {
+		return this._mode;
+	}
+
+	set mode (val: CalculationMode) {
+		this._mode = val;
 	}
 
 	octreeInsert (tree: Octree) {

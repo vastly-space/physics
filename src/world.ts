@@ -11,7 +11,12 @@ import { solve, groundCheck } from "./solver.js"
 import type { SolveResult } from "./solver.js"
 import { VecPool } from "./utils/pool.js"
 import Scheduler from "./scheduler.js"
-import { TICKRATE, GLOBAL_GRAVITY, MAX_DOWN_SPEED, STEP_UP_HEIGHT } from "./constants.js"
+import { TICKRATE, GLOBAL_GRAVITY, MAX_DOWN_SPEED, WORLD_MODE, MAX_INTERPOLATION_TICKS } from "./constants.js"
+
+import PacketProcessor from "./network/packetProcessor.js"
+import type { InitialPacket } from "./network/packetProcessor.js"
+import SnapshotBuffer from "./network/snapshotBuffer.js"
+import type { Snapshot } from "./network/snapshotBuffer.js"
 
 const MaxWorldBox = 2147483647 * 2;
 
@@ -51,6 +56,7 @@ export class World {
 	private locals: Map<number, DynamicBody> = new Map();
 	private controllers: Map<number, Controller> = new Map();
 	public scheduler: Scheduler;
+	public snapshotBuffer: SnapshotBuffer = new SnapshotBuffer();
 
 	constructor (options: WorldOptions, scheduler: Scheduler | null = null) {
 		generateDirectionsTable();
@@ -70,6 +76,11 @@ export class World {
 
 			this.scheduler.tickListener = this.step.bind(this);
 		}
+
+		if (WORLD_MODE === "client") {
+			this.snapshotBuffer.onSnapshot = this.processSnapshot.bind(this);
+			this.snapshotBuffer.onServerTick = this.processServerTick.bind(this);
+		}
 	}
 
 	get tick (): number {
@@ -80,12 +91,7 @@ export class World {
 		this.scheduler.tick = val;
 	}
 
-	step (): TickEvent[] {
-		for (const [id, k] of this.kinematics.entries()) {
-			k.scriptPos = k.transformations.step(this.scheduler.tick);
-			k.preStep();
-		}
-
+	private applyEnvVelocity () {
 		let deps: Record<number, number> = {};
 
 		for (const [id, d] of this.dynamics.entries()) {
@@ -143,55 +149,8 @@ export class World {
 			}
 		}
 
-		let tickEvents: TickEvent[] = [];
+		// Local bodies
 
-		for (const [id, d] of this.dynamics.entries()) {
-			d.preStep();
-
-			const tickResult = solve(d, this.octree, this.statics, this.kinematics, this.dynamics);
-
-			d.position = tickResult.desiredPosition;
-
-			const prevTriggers = new Set(d.triggerIntersections);
-			d.triggerIntersections.clear();
-
-			for (const ev of tickResult.events) {
-				if (ev.trigger) {
-					if (!prevTriggers.has(ev.body2.id)) {
-						tickEvents.push({
-							type: World.rTickEventTypes.triggerEnter,
-							body1: ev.body1,
-							body2: ev.body2
-						});
-					} else {
-						prevTriggers.delete(ev.body2.id);
-					}
-					d.triggerIntersections.add(ev.body2.id);
-				} else {
-					tickEvents.push({
-						type: World.rTickEventTypes.collide,
-						body1: ev.body1,
-						body2: ev.body2
-					});
-				}
-			}
-
-			for (const id of prevTriggers) {
-				const triggerBody = this.statics.get(id) || this.kinematics.get(id);
-
-				if (triggerBody !== undefined) {
-					tickEvents.push({
-						type: World.rTickEventTypes.triggerExit,
-						body1: d,
-						body2: triggerBody!
-					});
-				}
-			}
-		}
-
-		/*
-			LOCAL BODIES
-		*/
 		for (const [id, d] of this.locals.entries()) {
 			let envVelocity = VecPool.alloc().set(0, 0, 0);
 			// update environmental speed
@@ -216,49 +175,101 @@ export class World {
 
 			d.environmentalVelocity = envVelocity;
 		}
+	}
 
-		for (const [id, d] of this.locals.entries()) {
-			d.preStep();
+	private solveDynamicBody (body: DynamicBody): TickEvent[] {
+		const result:TickEvent[] = [];
 
-			const tickResult = solve(d, this.octree, this.statics, this.kinematics, this.dynamics);
+		body.preStep();
 
-			d.position = tickResult.desiredPosition;
+		const tickResult = solve(body, this.octree, this.statics, this.kinematics, this.dynamics);
 
-			const prevTriggers = new Set(d.triggerIntersections);
-			d.triggerIntersections.clear();
+		body.position = tickResult.desiredPosition;
 
-			for (const ev of tickResult.events) {
-				if (ev.trigger) {
-					if (!prevTriggers.has(ev.body2.id)) {
-						tickEvents.push({
-							type: World.rTickEventTypes.triggerEnter,
-							body1: ev.body1,
-							body2: ev.body2
-						});
-					} else {
-						prevTriggers.delete(ev.body2.id);
-					}
-					d.triggerIntersections.add(ev.body2.id);
-				} else {
-					tickEvents.push({
-						type: World.rTickEventTypes.collide,
+		const prevTriggers = new Set(body.triggerIntersections);
+		body.triggerIntersections.clear();
+
+		for (const ev of tickResult.events) {
+			if (ev.trigger) {
+				if (!prevTriggers.has(ev.body2.id)) {
+					result.push({
+						type: World.rTickEventTypes.triggerEnter,
 						body1: ev.body1,
 						body2: ev.body2
 					});
+				} else {
+					prevTriggers.delete(ev.body2.id);
 				}
+				body.triggerIntersections.add(ev.body2.id);
+			} else {
+				result.push({
+					type: World.rTickEventTypes.collide,
+					body1: ev.body1,
+					body2: ev.body2
+				});
 			}
+		}
 
-			for (const id of prevTriggers) {
-				const triggerBody = this.statics.get(id) || this.kinematics.get(id);
+		for (const id of prevTriggers) {
+			const triggerBody = this.statics.get(id) || this.kinematics.get(id);
 
-				if (triggerBody !== undefined) {
-					tickEvents.push({
-						type: World.rTickEventTypes.triggerExit,
-						body1: d,
-						body2: triggerBody!
-					});
-				}
+			if (triggerBody !== undefined) {
+				result.push({
+					type: World.rTickEventTypes.triggerExit,
+					body1: body,
+					body2: triggerBody!
+				});
 			}
+		}
+
+		return result;
+	}
+
+	private moveBySnapshot (body: KinematicBody | DynamicBody) {
+		const pos = VecPool.alloc();
+		if (this.scheduler.tick > body.anchorTick + MAX_INTERPOLATION_TICKS) {
+			// do nothing
+			pos.copy(body.position);
+		} else if (this.scheduler.tick > body.anchorTick) {
+			// extrapolate
+			pos.copy(body.anchorPos).addScaled(body.anchorVelocity, this.scheduler.tick - body.anchorTick);
+		} else {
+			// interpolate
+			const factor = (this.scheduler.tick - body.prevTick)/(body.anchorTick - body.prevTick);
+			pos.set(
+				(body.prevPos.x + (body.anchorPos.x - body.prevPos.x) * factor) | 0,
+				(body.prevPos.y + (body.anchorPos.y - body.prevPos.y) * factor) | 0,
+				(body.prevPos.z + (body.anchorPos.z - body.prevPos.z) * factor) | 0
+			);
+		}
+		body.position = pos;
+	}
+
+	step (): TickEvent[] {
+		for (const [id, k] of this.kinematics.entries()) {
+			if (k.mode === "SNAPSHOT") {
+				k.transformations.step(this.scheduler.tick);
+				this.moveBySnapshot(k);
+			} else {
+				k.scriptPos = k.transformations.step(this.scheduler.tick);
+				k.preStep();
+			}
+		}
+
+		this.applyEnvVelocity();
+
+		let tickEvents: TickEvent[] = [];
+
+		for (const [id, d] of this.dynamics.entries()) {
+			if (d.mode === "SNAPSHOT") {
+				this.moveBySnapshot(d);
+			} else {
+				tickEvents = tickEvents.concat(this.solveDynamicBody(d));
+			}
+		}
+
+		for (const [id, d] of this.locals.entries()) {
+			tickEvents = tickEvents.concat(this.solveDynamicBody(d));
 		}
 
 		for (const k of this.kinematics.values()) k.postStep(this.scheduler.tick);
@@ -341,6 +352,9 @@ export class World {
 				(body as DynamicBody).transformations.scheduler = this.scheduler;
 				break;
 		}
+
+		body.anchorTick = this.scheduler.tick;
+		body.prevTick = this.scheduler.tick;
 	}
 
 	addController (bodyId: number, controller: Controller) {
@@ -370,6 +384,10 @@ export class World {
 		this.locals.delete(id);
 	}
 
+	getBody (id: number): Body | null {
+		return this.statics.get(id) || this.kinematics.get(id) || this.dynamics.get(id) || null;
+	}
+
 	deleteController (id: number) {
 		this.controllers.delete(id);
 	}
@@ -388,5 +406,37 @@ export class World {
 
 	raycast (from: Vector3, to:Vector3, distance: number = 0): StaticBody | null {
 		return null;
+	}
+
+	get snapshot (): Uint8Array[] {
+		return PacketProcessor.serializeSnapshot(this.tick, this.kinematics, this.dynamics);
+	}
+
+	get initialPacket (): Uint8Array {
+		return PacketProcessor.serializeInitialPacket(this.tick, this.statics, this.kinematics, this.dynamics);
+	}
+
+	processSnapshot (snapshot: Snapshot) {
+
+	}
+
+	processServerTick (tick: number) {
+		this.scheduler.adjustSpeed(tick);
+	}
+
+	static buildFromInitialPacket (raw: Uint8Array): World {
+		const packet = PacketProcessor.deserializeInitialPacket(raw);
+
+		const result = new World({ tick: packet.tick });
+
+		for (const body of packet.bodies) {
+			body.mode = "SNAPSHOT";
+			if (body.kind === "dynamic") {
+				(body as DynamicBody).kinematicBehavior = true;
+			}
+			result.addBody(body);
+		}
+
+		return result;
 	}
 }
