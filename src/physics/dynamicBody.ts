@@ -174,7 +174,7 @@ export default class DynamicBody extends KinematicBody {
 			this._errorStep.copy(this.anchors[0].pos).sub(this._position);
 
 			if (this._errorStep.length() >= this._snapThreshold) {
-				this._position.add(this._errorStep);
+				this.moveBy(this._errorStep);
 				this._errorStep.set(0,0,0);
 				this._errorTicks = 0;
 			} else {
