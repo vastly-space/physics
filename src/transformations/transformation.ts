@@ -27,7 +27,7 @@ export class Transformation {
 		this.endCallback = endCallback;
 		this._loop = loop;
 
-		const duration = endTick - startTick - (data.length-1);
+		const duration = endTick - startTick;
 		const lengths = data.map(v => v.length());
 		const totalLength = lengths.reduce((acc, val) => acc + val, 0);
 		const times = lengths.map(l => Math.floor((l * duration) / totalLength));
@@ -51,7 +51,7 @@ export class Transformation {
 		let tick = startTick;
 		for (let i=0; i<data.length; i++) {
 			this.actionData.push(Transformation.buildAction(data[i], tick, times[i] as number));
-			tick += times[i] as number + 1;
+			tick += times[i] as number;
 		}
 	}
 
@@ -68,7 +68,7 @@ export class Transformation {
 	}
 
 	currentStep (dstTick: number, out: Vector3): boolean {
-		while (this.currentTick < dstTick) {
+		while (this.currentTick <= dstTick) {
 			this.currentTick++;
 
 			const action = this.actionData[this.currentAction];
@@ -91,7 +91,6 @@ export class Transformation {
 
 				if (this.currentTick === action.startTick + action.duration) {
 					this.currentAction++;
-					this.currentTick++;
 				}
 			}
 		}
@@ -110,14 +109,14 @@ export class Transformation {
 	rewind () {
 		this.currentAction = 0;
 
-		let tick = this.currentTick+1;
+		let tick = this.currentTick;
 
 		for (let i=0; i<this.actionData.length; i++) {
 			this.actionData[i].startTick = tick;
 			this.actionData[i].error[0] = 0;
 			this.actionData[i].error[1] = 0;
 			this.actionData[i].error[2] = 0;
-			tick += this.actionData[i].duration + 1;
+			tick += this.actionData[i].duration;
 		}
 	}
 
