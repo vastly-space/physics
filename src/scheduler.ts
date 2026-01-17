@@ -1,4 +1,4 @@
-import { WORLD_MODE, TICKRATE, SNAPSHOT_INTERVAL, SCHEDULER_TRAIL_SNAP, SCHEDULER_TRAIL_BOOST } from "./constants.js"
+import { WORLD_MODE, TICKRATE, SNAPSHOT_INTERVAL, SCHEDULER_TRAIL_SNAP, SCHEDULER_TRAIL_BOOST, CLIENT_DELAY } from "./constants.js"
 
 export default class Scheduler {
 	private snapshotInterval = Math.floor(TICKRATE/SNAPSHOT_INTERVAL);
@@ -11,6 +11,7 @@ export default class Scheduler {
 
 	public snapshotListener: ((tick: number) => void) | null = null;
 	public tickListener: ((tick: number) => void) | null = null;
+	public snapshotReceived: boolean = false;
 
 	constructor (tick: number = 0) {
 		this._tick = tick;
@@ -40,6 +41,11 @@ export default class Scheduler {
 	}
 
 	doTick () {
+		if (WORLD_MODE === "client" && !this.snapshotReceived) {
+			this.timeout = setTimeout(this.doTick.bind(this), this.baseTickDelay);
+			return;	
+		}
+
 		this._tick++;
 
 		if (this.tickListener !== null) this.tickListener(this._tick);
@@ -56,17 +62,7 @@ export default class Scheduler {
 		this.timeout = setTimeout(this.doTick.bind(this), this.baseTickDelay + (this.offset * this.trailBoost));
 	}
 
-	adjustSpeed (snapshotTick: number): boolean {
-		const offset = snapshotTick - this._tick;
-
-		if (offset >= SCHEDULER_TRAIL_SNAP) {
-			this._tick = snapshotTick;
-
-			return true;
-		} else {
-			this.offset = offset;
-
-			return false;
-		}
+	adjustSpeed (snapshotTick: number) {
+		const offset = snapshotTick - this._tick - CLIENT_DELAY;
 	}
 }

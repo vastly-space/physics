@@ -98,7 +98,6 @@ export class World {
 			let envVelocity = VecPool.alloc().set(0, 0, 0);
 			// update environmental speed
 			d.transformations.step(this.scheduler.tick);
-			d.preStep();
 			if (!d.kinematicBehavior) {
 				if (d.supportedBy !== -1) {
 					// we have a platform that carries body
@@ -149,13 +148,16 @@ export class World {
 			}
 		}
 
+		for (const [id, d] of this.dynamics.entries()) {
+			d.preStep();
+		}
+
 		// Local bodies
 
 		for (const [id, d] of this.locals.entries()) {
 			let envVelocity = VecPool.alloc().set(0, 0, 0);
 			// update environmental speed
 			d.transformations.step(this.scheduler.tick);
-			d.preStep();
 			if (!d.kinematicBehavior) {
 				if (d.supportedBy !== -1) {
 					// we have a platform that carries body
@@ -174,6 +176,7 @@ export class World {
 			}
 
 			d.environmentalVelocity = envVelocity;
+			d.preStep();
 		}
 	}
 
@@ -226,20 +229,21 @@ export class World {
 	}
 
 	private moveBySnapshot (body: KinematicBody | DynamicBody) {
+		const anchor = body.getNextAnchor(this.scheduler.tick);
 		const pos = VecPool.alloc();
-		if (this.scheduler.tick > body.anchorTick + MAX_INTERPOLATION_TICKS) {
+		if (anchor === null || this.scheduler.tick > anchor.tick + MAX_INTERPOLATION_TICKS) {
 			// do nothing
 			pos.copy(body.position);
-		} else if (this.scheduler.tick > body.anchorTick) {
+		} else if (this.scheduler.tick > anchor.tick) {
 			// extrapolate
-			pos.copy(body.anchorPos).addScaled(body.anchorVelocity, this.scheduler.tick - body.anchorTick);
+			pos.copy(anchor.pos).addScaled(body.anchorVelocity, this.scheduler.tick - anchor.tick);
 		} else {
 			// interpolate
-			const factor = (this.scheduler.tick - body.prevTick)/(body.anchorTick - body.prevTick);
+			const factor = (this.scheduler.tick - body.prevTick)/(anchor.tick - body.prevTick);
 			pos.set(
-				(body.prevPos.x + (body.anchorPos.x - body.prevPos.x) * factor) | 0,
-				(body.prevPos.y + (body.anchorPos.y - body.prevPos.y) * factor) | 0,
-				(body.prevPos.z + (body.anchorPos.z - body.prevPos.z) * factor) | 0
+				(body.prevPos.x + (anchor.pos.x - body.prevPos.x) * factor) | 0,
+				(body.prevPos.y + (anchor.pos.y - body.prevPos.y) * factor) | 0,
+				(body.prevPos.z + (anchor.pos.z - body.prevPos.z) * factor) | 0
 			);
 		}
 		body.position = pos;
@@ -388,6 +392,24 @@ export class World {
 		return this.statics.get(id) || this.kinematics.get(id) || this.dynamics.get(id) || null;
 	}
 
+	getBodies (): Record<number, Body> {
+		const result: Record<number, Body> = {};
+
+		for (const [id, b] of this.statics.entries()) {
+			result[id] = b;
+		}
+
+		for (const [id, b] of this.kinematics.entries()) {
+			result[id] = b;
+		}
+
+		for (const [id, b] of this.dynamics.entries()) {
+			result[id] = b;
+		}
+
+		return result;
+	}
+
 	deleteController (id: number) {
 		this.controllers.delete(id);
 	}
@@ -417,7 +439,19 @@ export class World {
 	}
 
 	processSnapshot (snapshot: Snapshot) {
+		for (const [id, state] of snapshot.bodies.entries()) {
+			const b = this.kinematics.get(id) || this.dynamics.get(id);
 
+			if (b === undefined) continue;
+
+			b.applySnapshot(
+				snapshot.tick,
+				new Vector3(state.position[0], state.position[1], state.position[2]),
+				new Vector3(state.velocity[0], state.velocity[1], state.velocity[2])
+			);
+		}
+
+		this.scheduler.snapshotReceived = true;
 	}
 
 	processServerTick (tick: number) {

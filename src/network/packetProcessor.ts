@@ -13,6 +13,7 @@ import {
 	SCHEDULER_TRAIL_BOOST,
 	MAX_INTERPOLATION_TICKS,
 	CLIENT_DELAY,
+	CORRECTION_TICKS,
 
 	SET_GLOBAL_SPEED,
 	SET_MAX_DOWN_SPEED,
@@ -27,7 +28,8 @@ import {
 	SET_SCHEDULER_TRAIL_SNAP,
 	SET_SCHEDULER_TRAIL_BOOST,
 	SET_MAX_INTERPOLATION_TICKS,
-	SET_CLIENT_DELAY
+	SET_CLIENT_DELAY,
+	SET_CORRECTION_TICKS
 } from "../constants.js"
 
 import StaticBody from "../physics/staticBody.js"
@@ -188,6 +190,7 @@ export default class PacketProcessor {
 		constants.push(SCHEDULER_TRAIL_BOOST);
 		constants.push(MAX_INTERPOLATION_TICKS);
 		constants.push(CLIENT_DELAY);
+		constants.push(CORRECTION_TICKS);
 
 		// tick
 		constants.push(tick);
@@ -218,7 +221,7 @@ export default class PacketProcessor {
 			view.setInt32(offset, body.id, true);
 			offset += 4;
 			// body kind
-			view.setInt8(offset, body.kind);
+			view.setUint8(offset, body.kind);
 			offset += 1;
 			// body position
 			view.setInt32(offset, body.position[0], true);
@@ -228,17 +231,17 @@ export default class PacketProcessor {
 			view.setInt32(offset, body.position[2], true);
 			offset += 4;
 			// body layer
-			view.setInt8(offset, body.layer);
+			view.setUint8(offset, body.layer);
 			offset += 1;
 			// body flags
-			view.setInt8(offset, body.flags);
+			view.setUint8(offset, body.flags);
 			offset += 1;
 			if (body.kind === 2) {
 				// body mask
-				view.setInt8(offset, body.mask!);
+				view.setUint8(offset, body.mask!);
 				offset += 1;
 				// body gravity multiplier
-				view.setInt8(offset, body.gravityMultiplier!);
+				view.setUint8(offset, body.gravityMultiplier!);
 				offset += 1;
 			}
 			// shapes
@@ -247,7 +250,7 @@ export default class PacketProcessor {
 				view.setInt32(offset, shape.byteLength-4, true);
 				offset += 4;
 				// shape type
-				view.setInt8(offset, shape.type);
+				view.setUint8(offset, shape.type);
 				offset += 1;
 				// shape offset
 				view.setInt32(offset, shape.offset[0], true);
@@ -270,7 +273,7 @@ export default class PacketProcessor {
 	static deserializeShape (view: DataView): Shape {
 		let offset = 0;
 
-		const type = view.getInt8(offset);
+		const type = view.getUint8(offset);
 		offset += 1;
 		const position = new Vector3();
 		position.x = view.getInt32(offset, true);
@@ -311,7 +314,7 @@ export default class PacketProcessor {
 
 		const id = view.getInt32(offset, true);
 		offset += 4;
-		const kind = view.getInt8(offset);
+		const kind = view.getUint8(offset);
 		offset += 1;
 		const position = new Vector3();
 		position.x = view.getInt32(offset, true);
@@ -320,17 +323,17 @@ export default class PacketProcessor {
 		offset += 4;
 		position.z = view.getInt32(offset, true);
 		offset += 4;
-		const layer = view.getInt8(offset);
+		const layer = view.getUint8(offset);
 		offset += 1;
-		const flags = view.getInt8(offset);
+		const flags = view.getUint8(offset);
 		offset += 1;
 
 		let gravityMultiplier: number;
 		let mask: number;
 		if (kind === 2) {
-			gravityMultiplier = view.getInt8(offset);
+			mask = view.getUint8(offset);
 			offset += 1;
-			mask = view.getInt8(offset);
+			gravityMultiplier = view.getUint8(offset);
 			offset += 1;
 		}
 
@@ -374,7 +377,7 @@ export default class PacketProcessor {
 	}
 
 	static deserializeInitialPacket (data: Uint8Array): InitialPacket {
-		const view = new DataView(data.buffer);
+		const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
 
 		let offset = 0;
 
@@ -406,6 +409,8 @@ export default class PacketProcessor {
 		offset += 4;
 		SET_CLIENT_DELAY(view.getInt32(offset, true));
 		offset += 4;
+		SET_CORRECTION_TICKS(view.getInt32(offset, true));
+		offset += 4;
 
 		const tick = view.getInt32(offset, true);
 		offset += 4;
@@ -417,7 +422,7 @@ export default class PacketProcessor {
 			offset += 4;
 			bodies.push(PacketProcessor.deserializeBody(new DataView(
 				data.buffer,
-				offset,
+				view.byteOffset + offset,
 				bodySize
 			)));
 			offset += bodySize;
@@ -437,7 +442,14 @@ export default class PacketProcessor {
 			42 bodies in a chunk
 		*/
 		const result: { view: DataView, chunk: Uint8Array }[] = [];
-		const bodies: Body[] = Array.from(kinematics.values()).concat(Array.from(dynamics.values()));
+		const bodies: Body[] = Array.from(kinematics.values()).concat(Array.from(dynamics.values())).filter(b => {
+			if (b.dirty) {
+				b.dirty = false;
+				return true;
+			} else {
+				return false;
+			}
+		});
 
 		let counter = 0;
 		while (counter < bodies.length) {
@@ -474,6 +486,7 @@ export default class PacketProcessor {
 			}
 
 			result.push({ view, chunk });
+			counter += bodiesInChunk;
 		}
 
 		for (let i=0; i<result.length; i++) {
@@ -487,7 +500,7 @@ export default class PacketProcessor {
 	}
 
 	static deserializeSnapshot (data: Uint8Array): SnapshotChunk {
-		const view = new DataView(data.buffer);
+		const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
 
 		const tick = view.getInt32(0, true);
 		const chunks = view.getInt16(4, true);

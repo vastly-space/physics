@@ -6,6 +6,11 @@ import { VecPool } from "../utils/pool.js"
 
 import TransformationSystem from "../transformations/transformationSystem.js"
 
+export interface SnapshotAnchor {
+	tick: number;
+	pos: Vector3;
+}
+
 export default class KinematicBody extends StaticBody {
 	protected readonly _kind: string = "kinematic";
 	protected _scriptMove: boolean = false;
@@ -13,6 +18,7 @@ export default class KinematicBody extends StaticBody {
 	protected _prevPos: Vector3 = new Vector3();
 	protected _motionDelta: Vector3 = new Vector3();
 	public transformations: TransformationSystem = new TransformationSystem(this.position);
+	protected anchors: SnapshotAnchor[] = [];
 
 	moveBy (vec: Vector3) {
 		this._position.add(vec);
@@ -60,5 +66,24 @@ export default class KinematicBody extends StaticBody {
 
 	postStep (tick: number) {
 		this._scriptMove = false;
+	}
+
+	applySnapshot (tick: number, pos: Vector3, vel: Vector3) {
+		this._anchorVelocity.copy(vel);
+		const anchor = { tick, pos };
+		let index = 0;
+		while (index < this.anchors.length && this.anchors[index].tick < anchor.tick) index++;
+
+		this.anchors.splice(index, 0, anchor);
+	}
+
+	getNextAnchor (tick: number): SnapshotAnchor | null {
+		while (this.anchors.length > 1 && this.anchors[0].tick < tick) {
+			const prev = this.anchors.shift();
+			this._prevPos.copy(prev!.pos);
+			this._prevTick = prev!.tick;
+		}
+
+		return this.anchors[0] || null;
 	}
 }

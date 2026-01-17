@@ -12,6 +12,7 @@ let SCHEDULER_TRAIL_SNAP = 20;
 let SCHEDULER_TRAIL_BOOST = 2;
 let MAX_INTERPOLATION_TICKS = 5;
 let CLIENT_DELAY = 8;
+let CORRECTION_TICKS = 4;
 let WORLD_MODE: 'standalone' | 'server' | 'client' = 'standalone';
 
 function SET_GLOBAL_SPEED (val: number) {
@@ -56,6 +57,9 @@ function SET_MAX_INTERPOLATION_TICKS (val: number) {
 function SET_CLIENT_DELAY (val: number) {
 	CLIENT_DELAY = val;
 }
+function SET_CORRECTION_TICKS (val: number) {
+	CORRECTION_TICKS = val;
+}
 function SET_WORLD_MODE (val: 'standalone' | 'server' | 'client') {
 	WORLD_MODE = val;
 }
@@ -75,6 +79,7 @@ export {
 	SCHEDULER_TRAIL_BOOST,
 	MAX_INTERPOLATION_TICKS,
 	CLIENT_DELAY,
+	CORRECTION_TICKS,
 	WORLD_MODE,
 
 	SET_GLOBAL_SPEED,
@@ -91,5 +96,6 @@ export {
 	SET_SCHEDULER_TRAIL_BOOST,
 	SET_MAX_INTERPOLATION_TICKS,
 	SET_CLIENT_DELAY,
+	SET_CORRECTION_TICKS,
 	SET_WORLD_MODE
 }

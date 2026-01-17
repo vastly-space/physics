@@ -117,7 +117,7 @@ export class Transformation {
 			this.actionData[i].error[0] = 0;
 			this.actionData[i].error[1] = 0;
 			this.actionData[i].error[2] = 0;
-			tick += this.actionData[i].duration;
+			tick += this.actionData[i].duration + 1;
 		}
 	}
 

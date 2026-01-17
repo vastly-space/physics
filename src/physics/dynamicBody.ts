@@ -1,7 +1,8 @@
 import Vector3 from "../math/vector3.js"
 import AABB from "../math/aabb.js"
 import KinematicBody from "./kinematicBody.js"
-import { TICKRATE } from "../constants.js"
+import { TICKRATE, GLOBAL_SPEED, CORRECTION_TICKS } from "../constants.js"
+import type Shape from "./shape.js"
 
 import { VecPool } from "../utils/pool.js"
 
@@ -26,6 +27,18 @@ export default class DynamicBody extends KinematicBody {
 	protected _triggerIntersections: Set<number> = new Set();
 	protected _sweptAABB: AABB = new AABB(new Vector3(), new Vector3());
 	protected _impulses: Impulse[] = [];
+	protected _errorStep: Vector3 = new Vector3();
+	protected _errorTicks: number = 0;
+	protected _snapThreshold: number;
+	protected _correctionTicksMultiplier: number = 1;
+
+	constructor (id: number, shapes: Shape[], position: Vector3, isTrigger: boolean, layer: number = 0) {
+		super(id, shapes, position, isTrigger, layer);
+
+		const br = VecPool.alloc().copy(this._aabb.max).add(this._aabb.min);
+		br.set(br.x/2, br.y/2, br.z/2);
+		this._snapThreshold = br.length() * 0.5;
+	}
 
 	get supportedBy (): number {
 		return this._supportedBy;
@@ -115,7 +128,7 @@ export default class DynamicBody extends KinematicBody {
 	}
 
 	preStep () {
-		if (this._kinematicBehavior) {
+		if (this._kinematicBehavior || this._mode === "SNAPSHOT") {
 			super.preStep();
 		} else {
 			this._velocity.copy(this._controllerVelocity).add(this._environmentalVelocity);
@@ -134,6 +147,11 @@ export default class DynamicBody extends KinematicBody {
 				}
 			}
 
+			if (this._errorTicks > 0) {
+				this._errorTicks--;
+				this._velocity.add(this._errorStep);
+			}
+
 			if (!this._velocity.isZero()) this.dirty = true;
 
 			const tickV = VecPool.alloc().copy(this.velocity).scale(TICKRATE/1000);
@@ -146,6 +164,30 @@ export default class DynamicBody extends KinematicBody {
 		super.postStep(tick);
 
 		this._impulses = this._impulses.filter(i => i.endTick > tick);
+
+		// calculate error and correction ticks
+		while (this.anchors.length > 0 && this.anchors[0].tick < tick) {
+			this.anchors.shift();
+		}
+
+		if (this.anchors.length > 0 && this.anchors[0].tick === tick) {
+			this._errorStep.copy(this.anchors[0].pos).sub(this._position);
+
+			if (this._errorStep.length() >= this._snapThreshold) {
+				this._position.add(this._errorStep);
+				this._errorStep.set(0,0,0);
+				this._errorTicks = 0;
+			} else {
+				this._errorTicks = Math.floor(CORRECTION_TICKS * this._correctionTicksMultiplier);
+				this._errorStep.set(
+					(this._errorStep.x / this._errorTicks) | 0,
+					(this._errorStep.y / this._errorTicks) | 0,
+					(this._errorStep.z / this._errorTicks) | 0
+				);
+			}
+
+			this.anchors.shift();
+		}
 	}
 
 	get position (): Vector3 {
@@ -154,6 +196,22 @@ export default class DynamicBody extends KinematicBody {
 
 	set position (val: Vector3) {
 		super.position = val;
+	}
+
+	get snapThreshold (): number {
+		return this._snapThreshold
+	}
+
+	set snapThreshold (val: number) {
+		this._snapThreshold = val;
+	}
+
+	get correctionTicksMultiplier (): number {
+		return this._correctionTicksMultiplier;
+	}
+
+	set correctionTicksMultiplier (val: number) {
+		this._correctionTicksMultiplier = val;
 	}
 
 	addImpulse (direction: Vector3, duration: number, decay: boolean) {
