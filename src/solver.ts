@@ -271,6 +271,8 @@ function moveCCD (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vecto
 
 	const checkCandidates = sourceBody.kinematicBehavior ? candidates.filter(c => c.body.isTrigger) : candidates;
 
+	let lateralContactExists: boolean = false;
+
 	while (intentVelocity.lengthSquared() > 100) {
 		const fromVec = VecPool.alloc().copy(intentPosition).add(sphere.offset);
 		const toVec = VecPool.alloc().copy(fromVec).add(intentVelocity);
@@ -297,6 +299,16 @@ function moveCCD (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vecto
 						collisionBody = candidate.body;
 						clippedXZ = lRes.normal!.y <= SLOPE_FLOAT;
 						clipped = true;
+
+						if (sourceBody.lateralContact !== -1) {
+							if (sourceBody.lateralContact === candidate.body.id) {
+								lateralContactExists = true;
+							}
+						} else {
+							if (lRes.normal!.y <= SLOPE_FLOAT) {
+								calculateLateralPreference(sourceBody, candidate.body.id, lRes.normal);
+							}
+						}
 					}
 				}
 			} else {
@@ -338,6 +350,16 @@ function moveCCD (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vecto
 							collisionBody = candidate.body;
 							clippedXZ = lRes.normal!.y <= SLOPE_FLOAT;
 							clipped = true;
+
+							if (sourceBody.lateralContact !== -1) {
+								if (sourceBody.lateralContact === candidate.body.id) {
+									lateralContactExists = true;
+								}
+							} else {
+								if (lRes.normal!.y <= SLOPE_FLOAT) {
+									calculateLateralPreference(sourceBody, candidate.body.id, lRes.normal);
+								}
+							}
 						}
 					}
 				}
@@ -355,11 +377,23 @@ function moveCCD (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vecto
 			intentPosition.y += intentVelocity.y * collision.t;
 			intentPosition.z += intentVelocity.z * collision.t;
 
-			const vn = intentVelocity.dot(collision.normal);
-			if (vn < 0) {
-				intentVelocity.x += collision.normal.x * (-vn);
-				intentVelocity.y += collision.normal.y * (-vn);
-				intentVelocity.z += collision.normal.z * (-vn);
+			if (sourceBody.isControlledBody && lateralContactExists) {				
+				const speed = intentVelocity.dot(sourceBody.lateralPreference as Vector3);
+
+				if (speed <= 0) {
+					intentVelocity.x = 0;
+					intentVelocity.z = 0;
+				} else {
+					intentVelocity.x = sourceBody.lateralPreference!.x * speed;
+					intentVelocity.z = sourceBody.lateralPreference!.z * speed;
+				}
+			} else {
+				const vn = intentVelocity.dot(collision.normal);
+				if (vn < 0) {
+					intentVelocity.x += collision.normal.x * (-vn);
+					intentVelocity.y += collision.normal.y * (-vn);
+					intentVelocity.z += collision.normal.z * (-vn);
+				}
 			}
 		}
 	}
