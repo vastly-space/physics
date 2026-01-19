@@ -306,7 +306,7 @@ function moveCCD (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vecto
 							}
 						} else {
 							if (lRes.normal!.y <= SLOPE_FLOAT) {
-								calculateLateralPreference(sourceBody, candidate.body.id, lRes.normal);
+								lateralContactExists = calculateLateralPreference(sourceBody, candidate.body.id, lRes.normal);
 							}
 						}
 					}
@@ -357,7 +357,7 @@ function moveCCD (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vecto
 								}
 							} else {
 								if (lRes.normal!.y <= SLOPE_FLOAT) {
-									calculateLateralPreference(sourceBody, candidate.body.id, lRes.normal);
+									lateralContactExists = calculateLateralPreference(sourceBody, candidate.body.id, lRes.normal);
 								}
 							}
 						}
@@ -423,21 +423,29 @@ function moveCCD (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vecto
 	}
 }
 
-function calculateLateralPreference (sourceBody: DynamicBody, contact: number, normal: Vector3) {
+function calculateLateralPreference (sourceBody: DynamicBody, contact: number, normal: Vector3): boolean {
 	sourceBody.lateralPreference = null;
 	sourceBody.lateralContact = -1;
 
 	const v = new Vector3().copy(sourceBody.velocity);
+	const xzn = VecPool.alloc().copy(normal);
+	xzn.y = 0;
+	xzn.normalize();
+	v.y = 0;
 	const vn = v.dot(normal);
 
-	if (vn <= 0) {
+	if (vn <= -1e-8) {
 		v.addScaled(normal, -vn);
 
 		if (v.lengthSquared() > 1e-8) {
 			sourceBody.lateralContact = contact;
 			sourceBody.lateralPreference = v.normalize();
+
+			return true;
 		}
 	}
+
+	return false;
 }
 
 function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vector3, candidates: CollisionCandidate[]): MovementResult {
@@ -468,7 +476,13 @@ function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Ve
 			}
 			currentIntersections = currentIntersections.filter(i => i.data.depth >= SLOP);
 
-			if (currentIntersections.length === 0) break;
+			if (currentIntersections.length === 0) {
+				if (!lateralContactExists) {
+					sourceBody.lateralPreference = null;
+					sourceBody.lateralContact = -1;
+				}
+				break;
+			}
 
 			const groundIntersections = currentIntersections.filter(i => i.type === "ground");
 			if (groundIntersections.length > 0) {
@@ -531,7 +545,7 @@ function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Ve
 
 				if (sourceBody.isControlledBody) {
 					if (!lateralContactExists) {
-						calculateLateralPreference(sourceBody, bestBody!.id, bestNormal!);
+						lateralContactExists = calculateLateralPreference(sourceBody, bestBody!.id, bestNormal!);
 					}
 
 					if (sourceBody.lateralPreference === null) {

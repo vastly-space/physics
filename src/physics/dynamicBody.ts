@@ -161,6 +161,11 @@ export default class DynamicBody extends KinematicBody {
 			const tickV = VecPool.alloc().copy(this.velocity).scale(TICKRATE/1000);
 
 			this._sweptAABB.copy(this._aabb).sweep(tickV);
+
+			if (this._velocity.isZero()) {
+				this._lateralPreference = null;
+				this._lateralContact = -1;
+			}
 		}
 	}
 
