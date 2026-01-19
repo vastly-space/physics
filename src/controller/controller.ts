@@ -25,6 +25,7 @@ export class Controller {
 
 	constructor (body: DynamicBody) {
 		this._body = body;
+		this._body.isControlledBody = true;
 	}
 
 	get body (): DynamicBody {

@@ -73,8 +73,6 @@ export class World {
 			this.scheduler = scheduler;
 		} else {
 			this.scheduler = new Scheduler(options.tick);
-
-			this.scheduler.tickListener = this.step.bind(this);
 		}
 
 		if (WORLD_MODE === "client") {

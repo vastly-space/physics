@@ -32,6 +32,10 @@ export default class DynamicBody extends KinematicBody {
 	protected _snapThreshold: number;
 	protected _correctionTicksMultiplier: number = 1;
 
+	protected _lateralPreference: Vector3 | null = null;
+	protected _lateralContact: number = -1;
+	protected _isControlledBody: boolean = false;
+
 	constructor (id: number, shapes: Shape[], position: Vector3, isTrigger: boolean, layer: number = 0) {
 		super(id, shapes, position, isTrigger, layer);
 
@@ -225,5 +229,33 @@ export default class DynamicBody extends KinematicBody {
 
 	clearImpulses () {
 		this._impulses = [];
+	}
+
+	get lateralPreference (): Vector3 | null {
+		return this._lateralPreference;
+	}
+
+	set lateralPreference (val: Vector3 | null) {
+		if (val === null) {
+			this._lateralPreference = null;
+		} else {
+			this._lateralPreference = val;
+		}
+	}
+
+	get lateralContact (): number {
+		return this._lateralContact;
+	}
+
+	set lateralContact (val: number) {
+		this._lateralContact = val;
+	}
+
+	get isControlledBody (): boolean {
+		return this._isControlledBody;
+	}
+
+	set isControlledBody (val: boolean) {
+		this._isControlledBody = val;
 	}
 }

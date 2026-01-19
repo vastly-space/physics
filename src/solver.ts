@@ -389,6 +389,23 @@ function moveCCD (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vecto
 	}
 }
 
+function calculateLateralPreference (sourceBody: DynamicBody, contact: number, normal: Vector3) {
+	sourceBody.lateralPreference = null;
+	sourceBody.lateralContact = -1;
+
+	const v = new Vector3().copy(sourceBody.velocity);
+	const vn = v.dot(normal);
+
+	if (vn <= 0) {
+		v.addScaled(normal, -vn);
+
+		if (v.lengthSquared() > 1e-8) {
+			sourceBody.lateralContact = contact;
+			sourceBody.lateralPreference = v.normalize();
+		}
+	}
+}
+
 function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Vector3, candidates: CollisionCandidate[]): MovementResult {
 	const intentPosition = VecPool.alloc().copy(resPosition);
 	const intentVelocity = VecPool.alloc().copy(velocity).scale(TICKRATE/1000);
@@ -403,6 +420,10 @@ function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Ve
 	if (sourceBody.kinematicBehavior) {
 		intentPosition.add(intentVelocity);
 	} else {
+		let maxLateralAffected: number = 0;
+		let maxLateralContact: number = -1;
+		let lateralContactExists: boolean = false;
+
 		while (intentVelocity.lengthSquared() > 100 && iterations < MAX_DEPENETRATION_ITERATIONS) {
 			intentPosition.add(intentVelocity);
 
@@ -448,6 +469,10 @@ function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Ve
 						bestNormal = intersection.data.normal;
 						bestBody = intersection.candidate.body;
 					}
+
+					if (intersection.candidate.body.id === sourceBody.lateralContact) {
+						lateralContactExists = true;
+					}
 				}
 
 				clippedXZ = bestNormal!.y <= SLOPE_FLOAT;
@@ -470,15 +495,42 @@ function moveIntent (sourceBody: DynamicBody, resPosition: Vector3, velocity: Ve
 					intentPosition.z + mtv.z
 				);
 
-				const vn = intentVelocity.dot(bestNormal!);
-				if (vn < 0) {
-					intentVelocity.x += bestNormal!.x * (-vn);
-					intentVelocity.z += bestNormal!.z * (-vn);
+				if (sourceBody.isControlledBody) {
+					if (!lateralContactExists) {
+						calculateLateralPreference(sourceBody, bestBody!.id, bestNormal!);
+					}
+
+					if (sourceBody.lateralPreference === null) {
+						intentVelocity.x = 0;
+						intentVelocity.z = 0;
+					} else {
+						const speed = intentVelocity.dot(sourceBody.lateralPreference);
+
+						if (speed <= 0) {
+							intentVelocity.x = 0;
+							intentVelocity.z = 0;
+						} else {
+							intentVelocity.x = sourceBody.lateralPreference.x * speed;
+							intentVelocity.z = sourceBody.lateralPreference.z * speed;
+						}
+					}
+				} else {
+					const vn = intentVelocity.dot(bestNormal!);
+					if (vn < 0) {
+						intentVelocity.x += bestNormal!.x * (-vn);
+						intentVelocity.z += bestNormal!.z * (-vn);
+					}
 				}
+
 				iterations++;
 
 				contacts.add(bestBody!);
 				continue;
+			} else {
+				if (!lateralContactExists) {
+					sourceBody.lateralPreference = null;
+					sourceBody.lateralContact = -1;
+				}
 			}
 
 			const ceilingIntersections = currentIntersections.filter(i => i.type === "ceiling");

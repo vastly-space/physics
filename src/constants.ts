@@ -11,7 +11,7 @@ let SNAPSHOT_INTERVAL = 4;
 let SCHEDULER_TRAIL_SNAP = 20;
 let SCHEDULER_TRAIL_BOOST = 2;
 let MAX_INTERPOLATION_TICKS = 5;
-let CLIENT_DELAY = 8;
+let CLIENT_DELAY = 5;
 let CORRECTION_TICKS = 4;
 let WORLD_MODE: 'standalone' | 'server' | 'client' = 'standalone';
 

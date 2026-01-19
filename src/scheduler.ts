@@ -1,5 +1,7 @@
 import { WORLD_MODE, TICKRATE, SNAPSHOT_INTERVAL, SCHEDULER_TRAIL_SNAP, SCHEDULER_TRAIL_BOOST, CLIENT_DELAY } from "./constants.js"
 
+type TickListener = (tick: number) => void;
+
 export default class Scheduler {
 	private snapshotInterval = Math.floor(TICKRATE/SNAPSHOT_INTERVAL);
 	private trailBoost: number = SCHEDULER_TRAIL_BOOST/100;
@@ -9,8 +11,8 @@ export default class Scheduler {
 	private timeout: ReturnType<typeof setTimeout> | null = null;
 	private baseTickDelay: number;
 
-	public snapshotListener: ((tick: number) => void) | null = null;
-	public tickListener: ((tick: number) => void) | null = null;
+	private snapshotListeners: Set<TickListener> = new Set();
+	private tickListeners: Set<TickListener> = new Set();
 	public snapshotReceived: boolean = false;
 
 	constructor (tick: number = 0) {
@@ -48,13 +50,19 @@ export default class Scheduler {
 
 		this._tick++;
 
-		if (this.tickListener !== null) this.tickListener(this._tick);
+		if (this.tickListeners.size > 0) {
+			for (const l of this.tickListeners) {
+				l(this._tick);
+			}
+		}
 
 		if (WORLD_MODE === "server") {
 			this.last_snapshot++;
 
-			if (this.snapshotListener !== null && this.last_snapshot >= this.snapshotInterval) {
-				this.snapshotListener(this._tick);
+			if (this.snapshotListeners.size > 0 && this.last_snapshot >= this.snapshotInterval) {
+				for (const l of this.snapshotListeners) {
+					l(this._tick);
+				}
 				this.last_snapshot = 0;
 			}
 		}
@@ -64,5 +72,21 @@ export default class Scheduler {
 
 	adjustSpeed (snapshotTick: number) {
 		const offset = snapshotTick - this._tick - CLIENT_DELAY;
+	}
+
+	addSnapshotListener (l: TickListener) {
+		this.snapshotListeners.add(l);
+	}
+
+	removeSnapshotListener (l: TickListener) {
+		this.snapshotListeners.delete(l);
+	}
+
+	addTickListener (l: TickListener) {
+		this.tickListeners.add(l);
+	}
+
+	removeTickListener (l: TickListener) {
+		this.tickListeners.delete(l);
 	}
 }
