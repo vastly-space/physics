@@ -74,6 +74,7 @@ export interface BodyState {
 	id: number;
 	position: number[];
 	velocity: number[];
+	supportedBy: number;
 }
 
 export interface SnapshotChunk {
@@ -436,10 +437,10 @@ export default class PacketProcessor {
 
 	static serializeSnapshot (tick: number, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): Uint8Array[] {
 		/*
-			single body is 28 bytes
+			single body is 32 bytes
 			snapshot chunk can hold 1200 bytes
 			for bodies it can hold 1200 - 4 - 2 - 2 = 1192
-			42 bodies in a chunk
+			37 bodies in a chunk
 		*/
 		const result: { view: DataView, chunk: Uint8Array }[] = [];
 		const bodies: Body[] = Array.from(kinematics.values()).concat(Array.from(dynamics.values())).filter(b => {
@@ -453,8 +454,8 @@ export default class PacketProcessor {
 
 		let counter = 0;
 		while (counter < bodies.length) {
-			let bodiesInChunk = Math.min(42, bodies.length - counter);
-			let chunk = new Uint8Array(8 + bodiesInChunk*28);
+			let bodiesInChunk = Math.min(37, bodies.length - counter);
+			let chunk = new Uint8Array(8 + bodiesInChunk*32);
 			let view = new DataView(chunk.buffer);
 
 			let offset = 8;
@@ -482,6 +483,9 @@ export default class PacketProcessor {
 				view.setInt32(offset, vel.y, true);
 				offset += 4;
 				view.setInt32(offset, vel.z, true);
+				offset += 4;
+				// ground
+				view.setInt32(offset, bodies[counter+i] instanceof DynamicBody ? (bodies[counter+i] as DynamicBody).supportedBy : -1, true);
 				offset += 4;
 			}
 
@@ -521,8 +525,9 @@ export default class PacketProcessor {
 				view.getInt32(offset + 20, true),
 				view.getInt32(offset + 24, true)
 			];
-			bodies.push({ id, position, velocity });
-			offset += 28;
+			const supportedBy = view.getInt32(offset + 28, true);
+			bodies.push({ id, position, velocity, supportedBy });
+			offset += 32;
 		}
 
 		return {
