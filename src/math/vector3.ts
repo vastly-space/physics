@@ -171,4 +171,52 @@ export default class Vector3 {
 
 		return this;
 	}
+
+	rotate (rx: number, ry: number, rz: number): Vector3 {
+		let x = this._x;
+		let y = this._y;
+		let z = this._z;
+
+		// Rotate around global X
+		{
+			const c = Math.cos(rx);
+			const s = Math.sin(rx);
+
+			const ny = y * c - z * s;
+			const nz = y * s + z * c;
+
+			y = ny;
+			z = nz;
+		}
+
+		// Rotate around global Y
+		{
+			const c = Math.cos(ry);
+			const s = Math.sin(ry);
+
+			const nx = x * c + z * s;
+			const nz = -x * s + z * c;
+
+			x = nx;
+			z = nz;
+		}
+
+		// Rotate around global Z
+		{
+			const c = Math.cos(rz);
+			const s = Math.sin(rz);
+
+			const nx = x * c - y * s;
+			const ny = x * s + y * c;
+
+			x = nx;
+			y = ny;
+		}
+
+		this.x = x;
+		this.y = y;
+		this.z = z;
+
+		return this;
+	}
 }

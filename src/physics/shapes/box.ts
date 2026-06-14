@@ -8,16 +8,22 @@ import { VecPool } from "../../utils/pool.js"
 export default class Box implements Shape {
 	public readonly type: string = "box";
 	public readonly offset: Vector3;
-	public readonly width: number;
-	public readonly height: number;
-	public readonly depth: number;
+	private originalWidth: number;
+	private originalHeight: number;
+	private originalDepth: number;
+	public width: number;
+	public height: number;
+	public depth: number;
 	public readonly aabb: AABB;
 
 	constructor (offset: Vector3, width: number, height: number, depth: number) {
 		this.offset = offset;
 		this.width = width;
+		this.originalWidth = width;
 		this.height = height;
+		this.originalHeight = height;
 		this.depth = depth;
+		this.originalDepth = depth;
 		this.aabb = new AABB(
 			new Vector3(
 				-divTrunc(this.width, 2),
@@ -41,5 +47,42 @@ export default class Box implements Shape {
 			center - r,
 			center + r
 		];
+	}
+
+	setRotation (rx: number, ry: number, rz: number) {
+		const xv = VecPool.alloc().set(divTrunc(this.originalWidth, 2), 0, 0).rotate(rx, ry, rz);
+		const yv = VecPool.alloc().set(0, divTrunc(this.originalHeight, 2), 0).rotate(rx, ry, rz);
+		const zv = VecPool.alloc().set(0, 0, divTrunc(this.originalDepth, 2)).rotate(rx, ry, rz);
+
+		const halfWidth =
+			Math.abs(xv.x) +
+			Math.abs(yv.x) +
+			Math.abs(zv.x);
+
+		const halfHeight =
+			Math.abs(xv.y) +
+			Math.abs(yv.y) +
+			Math.abs(zv.y);
+
+		const halfDepth =
+			Math.abs(xv.z) +
+			Math.abs(yv.z) +
+			Math.abs(zv.z);
+
+		this.width = divTrunc(halfWidth * 2, 1);
+		this.height = divTrunc(halfHeight * 2, 1);
+		this.depth = divTrunc(halfDepth * 2, 1);
+
+		this.aabb.min.set(
+			-divTrunc(this.width, 2),
+			-divTrunc(this.height, 2),
+			-divTrunc(this.depth, 2)
+		);
+
+		this.aabb.max.set(
+			divTrunc(this.width, 2),
+			divTrunc(this.height, 2),
+			divTrunc(this.depth, 2)
+		);
 	}
 }
