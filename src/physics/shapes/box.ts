@@ -7,17 +7,19 @@ import { VecPool } from "../../utils/pool.js"
 
 export default class Box implements Shape {
 	public readonly type: string = "box";
-	public readonly offset: Vector3;
 	private originalWidth: number;
+	private originalOffset: Vector3;
 	private originalHeight: number;
 	private originalDepth: number;
+	public offset: Vector3;
 	public width: number;
 	public height: number;
 	public depth: number;
 	public readonly aabb: AABB;
 
 	constructor (offset: Vector3, width: number, height: number, depth: number) {
-		this.offset = offset;
+		this.originalOffset = offset;
+		this.offset = offset.clone();
 		this.width = width;
 		this.originalWidth = width;
 		this.height = height;
@@ -73,6 +75,9 @@ export default class Box implements Shape {
 		this.height = divTrunc(halfHeight * 2, 1);
 		this.depth = divTrunc(halfDepth * 2, 1);
 
+		this.offset = this.originalOffset.clone();
+		this.offset.rotate(rx, ry, rz);
+
 		this.aabb.min.set(
 			-divTrunc(this.width, 2),
 			-divTrunc(this.height, 2),
@@ -84,5 +89,7 @@ export default class Box implements Shape {
 			divTrunc(this.height, 2),
 			divTrunc(this.depth, 2)
 		);
+
+		this.aabb.translate(this.offset);
 	}
 }
