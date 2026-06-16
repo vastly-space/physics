@@ -7,4 +7,5 @@ export default interface Shape {
 	offset: Vector3;
 	aabb: AABB;
 	projectOnAxis: (globalOffset: Vector3, axis: Vector3) => [number, number];
+	setRotation: (x: number, y: number, z:number) => void;
 }

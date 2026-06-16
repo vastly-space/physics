@@ -49,4 +49,8 @@ export default class Trimesh implements Shape {
 	projectOnAxis (parentOffset: Vector3, axis: Vector3): [number, number] {
 		throw new Error("Trimesh should not be projected on axis, use its triangles");
 	}
+
+	setRotation (x: number, y: number, z: number) {
+		// do nothing
+	}
 }

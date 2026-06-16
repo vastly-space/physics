@@ -7,14 +7,16 @@ import { VecPool } from "../../utils/pool.js"
 
 export default class Capsule implements Shape {
 	public readonly type: string = "capsule";
-	public readonly offset: Vector3;
+	public offset: Vector3;
 	public readonly aabb: AABB;
 	public readonly height: number;
 	public readonly radius: number;
 	public readonly halfSegmentLength: number;
+	private originalOffset: Vector3;
 
 	constructor (offset: Vector3, height: number, radius: number) {
-		this.offset = offset;
+		this.originalOffset = offset;
+		this.offset = offset.clone();
 		this.height = height;
 		this.radius = radius;
 		this.halfSegmentLength = (this.height - 2 * this.radius) / 2;
@@ -38,5 +40,23 @@ export default class Capsule implements Shape {
 			centerDot - Math.abs(yDot) - this.radius,
 			centerDot + Math.abs(yDot) + this.radius
 		];
+	}
+
+	setRotation (x: number, y: number, z: number) {
+		this.offset.copy(this.originalOffset).rotate(x, y, z);
+
+		const hh = divTrunc(this.height, 2);
+
+		this.aabb.min.set(
+			this.offset.x - this.radius,
+			this.offset.y - hh,
+			this.offset.z - this.radius
+		);
+
+		this.aabb.max.set(
+			this.offset.x + this.radius,
+			this.offset.y + hh,
+			this.offset.z + this.radius
+		);
 	}
 }

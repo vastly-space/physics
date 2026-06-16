@@ -6,12 +6,14 @@ import { VecPool } from "../../utils/pool.js"
 
 export default class Sphere implements Shape {
 	public readonly type: string = "sphere";
-	public readonly offset: Vector3;
+	public offset: Vector3;
 	public readonly radius: number;
 	public readonly aabb: AABB;
+	private originalOffset: Vector3;
 
 	constructor (offset: Vector3, radius: number) {
-		this.offset = offset;
+		this.originalOffset = offset;
+		this.offset = offset.clone();
 		this.radius = radius;
 		const min = this.offset.clone();
 		min.set(min.x - radius, min.y - radius, min.z - radius);
@@ -27,5 +29,21 @@ export default class Sphere implements Shape {
 			center - this.radius,
 			center + this.radius
 		];
+	}
+
+	setRotation (x: number, y: number, z: number) {
+		this.offset.copy(this.originalOffset).rotate(x, y, z);
+
+		this.aabb.min.set(
+			this.offset.x - this.radius,
+			this.offset.y - this.radius,
+			this.offset.z - this.radius
+		);
+
+		this.aabb.max.set(
+			this.offset.x + this.radius,
+			this.offset.y + this.radius,
+			this.offset.z + this.radius
+		);
 	}
 }

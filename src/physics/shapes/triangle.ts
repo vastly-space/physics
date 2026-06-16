@@ -31,4 +31,8 @@ export default class Triangle implements Shape {
 			Math.max(a,b,c)
 		]
 	}
+
+	setRotation (x: number, y: number, z: number) {
+		// do nothing
+	}
 }

@@ -86,4 +86,10 @@ export default class KinematicBody extends StaticBody {
 
 		return this.anchors[0] || null;
 	}
+
+	setRotation (x: number, y: number, z: number) {
+		for (const shape of this.shapes) {
+			shape.setRotation(x, y, z);
+		}
+	}
 }
