@@ -1,6 +1,6 @@
 {
   "name": "@tripod311/physics",
-  "version": "0.0.6",
+  "version": "0.1.0",
   "description": "Simple physics engine with built-in networking",
   "keywords": [
     "js",
