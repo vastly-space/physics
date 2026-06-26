@@ -31,8 +31,12 @@ export default class Sphere implements Shape {
 		];
 	}
 
-	setRotation (x: number, y: number, z: number) {
-		this.offset.copy(this.originalOffset).rotate(x, y, z);
+	setRotation (rotation: Vector3) {
+		const rx = rotation.x;
+		const ry = rotation.y;
+		const rz = rotation.z;
+		
+		this.offset.copy(this.originalOffset).rotate(rx, ry, rz);
 
 		this.aabb.min.set(
 			this.offset.x - this.radius,

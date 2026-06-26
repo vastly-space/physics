@@ -51,7 +51,11 @@ export default class Box implements Shape {
 		];
 	}
 
-	setRotation (rx: number, ry: number, rz: number) {
+	setRotation (rotation: Vector3) {
+		const rx = rotation.x;
+		const ry = rotation.y;
+		const rz = rotation.z;
+
 		const xv = VecPool.alloc().set(divTrunc(this.originalWidth, 2), 0, 0).rotate(rx, ry, rz);
 		const yv = VecPool.alloc().set(0, divTrunc(this.originalHeight, 2), 0).rotate(rx, ry, rz);
 		const zv = VecPool.alloc().set(0, 0, divTrunc(this.originalDepth, 2)).rotate(rx, ry, rz);

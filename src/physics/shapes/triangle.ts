@@ -32,7 +32,7 @@ export default class Triangle implements Shape {
 		]
 	}
 
-	setRotation (x: number, y: number, z: number) {
+	setRotation (rotation: Vector3) {
 		// do nothing
 	}
 }

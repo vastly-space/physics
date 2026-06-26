@@ -1,101 +1,18 @@
-let GLOBAL_SPEED: number = 5000;
-let MAX_DOWN_SPEED: number = -10000;
-let GLOBAL_GRAVITY: number = 9870;
-let MAX_DEPENETRATION_ITERATIONS: number = 3;
-let MAX_SLOPE: number = 45;
-let STEP_UP_HEIGHT: number = 200;
-let TICKRATE: number = 20;
-let GROUND_PROBE: number = 200;
-let NUM_DIRECTIONS = 360;
-let SNAPSHOT_INTERVAL = 4;
-let SCHEDULER_TRAIL_SNAP = 20;
-let SCHEDULER_TRAIL_BOOST = 2;
-let MAX_INTERPOLATION_TICKS = 5;
-let CLIENT_DELAY = 5;
-let CORRECTION_TICKS = 4;
-let WORLD_MODE: 'standalone' | 'server' | 'client' = 'standalone';
-
-function SET_GLOBAL_SPEED (val: number) {
-	GLOBAL_SPEED = val;
-}
-function SET_MAX_DOWN_SPEED (val: number) {
-	MAX_DOWN_SPEED = val;
-}
-function SET_GLOBAL_GRAVITY (val: number) {
-	GLOBAL_GRAVITY = val;
-}
-function SET_MAX_DEPENETRATION_ITERATIONS (val: number) {
-	MAX_DEPENETRATION_ITERATIONS = val;
-}
-function SET_MAX_SLOPE (val: number) {
-	MAX_SLOPE = val;
-}
-function SET_STEP_UP_HEIGHT (val: number) {
-	STEP_UP_HEIGHT = val;
-}
-function SET_TICKRATE (val: number) {
-	TICKRATE = val;
-}
-function SET_GROUND_PROBE (val: number) {
-	GROUND_PROBE = val;
-}
-function SET_NUM_DIRECTIONS (val: number) {
-	NUM_DIRECTIONS = val;
-}
-function SET_SNAPSHOT_INTERVAL (val: number) {
-	SNAPSHOT_INTERVAL = val;
-}
-function SET_SCHEDULER_TRAIL_SNAP (val: number) {
-	SCHEDULER_TRAIL_SNAP = val;
-}
-function SET_SCHEDULER_TRAIL_BOOST (val: number) {
-	SCHEDULER_TRAIL_BOOST = val;
-}
-function SET_MAX_INTERPOLATION_TICKS (val: number) {
-	MAX_INTERPOLATION_TICKS = val;
-}
-function SET_CLIENT_DELAY (val: number) {
-	CLIENT_DELAY = val;
-}
-function SET_CORRECTION_TICKS (val: number) {
-	CORRECTION_TICKS = val;
-}
-function SET_WORLD_MODE (val: 'standalone' | 'server' | 'client') {
-	WORLD_MODE = val;
-}
-
-export {
-	GLOBAL_SPEED,
-	MAX_DOWN_SPEED,
-	GLOBAL_GRAVITY,
-	MAX_DEPENETRATION_ITERATIONS,
-	MAX_SLOPE,
-	STEP_UP_HEIGHT,
-	TICKRATE,
-	GROUND_PROBE,
-	NUM_DIRECTIONS,
-	SNAPSHOT_INTERVAL,
-	SCHEDULER_TRAIL_SNAP,
-	SCHEDULER_TRAIL_BOOST,
-	MAX_INTERPOLATION_TICKS,
-	CLIENT_DELAY,
-	CORRECTION_TICKS,
-	WORLD_MODE,
-
-	SET_GLOBAL_SPEED,
-	SET_MAX_DOWN_SPEED,
-	SET_GLOBAL_GRAVITY,
-	SET_MAX_DEPENETRATION_ITERATIONS,
-	SET_MAX_SLOPE,
-	SET_STEP_UP_HEIGHT,
-	SET_TICKRATE,
-	SET_GROUND_PROBE,
-	SET_NUM_DIRECTIONS,
-	SET_SNAPSHOT_INTERVAL,
-	SET_SCHEDULER_TRAIL_SNAP,
-	SET_SCHEDULER_TRAIL_BOOST,
-	SET_MAX_INTERPOLATION_TICKS,
-	SET_CLIENT_DELAY,
-	SET_CORRECTION_TICKS,
-	SET_WORLD_MODE
+export default class Constants {
+	public WORLD_MODE: 'standalone' | 'server' | 'client' = 'standalone';
+	public GLOBAL_SPEED: number = 5000;
+	public MAX_DOWN_SPEED: number = -10000;
+	public GLOBAL_GRAVITY: number = 9870;
+	public MAX_DEPENETRATION_ITERATIONS: number = 3;
+	public MAX_SLOPE: number = 45;
+	public STEP_UP_HEIGHT: number = 200;
+	public TICKRATE: number = 20;
+	public GROUND_PROBE: number = 200;
+	public NUM_DIRECTIONS = 360;
+	public SNAPSHOT_INTERVAL = 4;
+	public SCHEDULER_TRAIL_SNAP = 20;
+	public SCHEDULER_TRAIL_BOOST = 2;
+	public MAX_INTERPOLATION_TICKS = 5;
+	public CLIENT_DELAY = 5;
+	public CORRECTION_TICKS = 4;
 }

@@ -17,7 +17,7 @@ export default class KinematicBody extends StaticBody {
 	protected _scriptPos: Vector3 = new Vector3();
 	protected _prevPos: Vector3 = new Vector3();
 	protected _motionDelta: Vector3 = new Vector3();
-	public transformations: TransformationSystem = new TransformationSystem(this.position);
+	public transformations: TransformationSystem = new TransformationSystem(this);
 	protected anchors: SnapshotAnchor[] = [];
 
 	moveBy (vec: Vector3) {
@@ -44,7 +44,7 @@ export default class KinematicBody extends StaticBody {
 
 	set scriptPos (val: Vector3) {
 		this._scriptPos = val;
-		this._scriptMove = !this._scriptPos.isZero();
+		this._scriptMove = !(this._scriptPos.equals(this._position));
 	}
 
 	get motionDelta (): Vector3 {
@@ -87,9 +87,9 @@ export default class KinematicBody extends StaticBody {
 		return this.anchors[0] || null;
 	}
 
-	setRotation (x: number, y: number, z: number) {
-		for (const shape of this.shapes) {
-			shape.setRotation(x, y, z);
-		}
+	setConstants (val: any) {
+		super.setConstants(val);
+
+		this.transformations.TICKRATE = val.TICKRATE;
 	}
 }

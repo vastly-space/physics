@@ -1,15 +1,6 @@
 import Vector3 from "../math/vector3.js"
 import { divTrunc } from "../math/utils.js"
-
-export type EndCallback = () => void;
-
-export interface ActionData {
-	duration: number;
-	startTick: number;
-	step: number[];
-	remainder: number[];
-	error: number[];
-}
+import type { ActionData, EndCallback } from "./transformationSystem.js"
 
 export class Transformation {
 	private _loop: boolean;

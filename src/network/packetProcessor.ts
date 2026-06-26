@@ -1,36 +1,4 @@
-import {
-	GLOBAL_SPEED,
-	MAX_DOWN_SPEED,
-	GLOBAL_GRAVITY,
-	MAX_DEPENETRATION_ITERATIONS,
-	MAX_SLOPE,
-	STEP_UP_HEIGHT,
-	TICKRATE,
-	GROUND_PROBE,
-	NUM_DIRECTIONS,
-	SNAPSHOT_INTERVAL,
-	SCHEDULER_TRAIL_SNAP,
-	SCHEDULER_TRAIL_BOOST,
-	MAX_INTERPOLATION_TICKS,
-	CLIENT_DELAY,
-	CORRECTION_TICKS,
-
-	SET_GLOBAL_SPEED,
-	SET_MAX_DOWN_SPEED,
-	SET_GLOBAL_GRAVITY,
-	SET_MAX_DEPENETRATION_ITERATIONS,
-	SET_MAX_SLOPE,
-	SET_STEP_UP_HEIGHT,
-	SET_TICKRATE,
-	SET_GROUND_PROBE,
-	SET_NUM_DIRECTIONS,
-	SET_SNAPSHOT_INTERVAL,
-	SET_SCHEDULER_TRAIL_SNAP,
-	SET_SCHEDULER_TRAIL_BOOST,
-	SET_MAX_INTERPOLATION_TICKS,
-	SET_CLIENT_DELAY,
-	SET_CORRECTION_TICKS
-} from "../constants.js"
+import Constants from "../constants.js"
 
 import StaticBody from "../physics/staticBody.js"
 import KinematicBody from "../physics/kinematicBody.js"
@@ -66,6 +34,7 @@ interface BodyDescription {
 }
 
 export interface InitialPacket {
+	constants: Constants;
 	tick: number;
 	bodies: Body[];
 }
@@ -173,24 +142,24 @@ export default class PacketProcessor {
 		return desc;
 	}
 
-	static serializeInitialPacket (tick: number, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): Uint8Array {
+	static serializeInitialPacket (worldConstants: Constants, tick: number, statics: Map<number, StaticBody>, kinematics: Map<number, KinematicBody>, dynamics: Map<number, DynamicBody>): Uint8Array {
 		const constants: number[] = [];
 		// int32
-		constants.push(GLOBAL_SPEED);
-		constants.push(MAX_DOWN_SPEED);
-		constants.push(GLOBAL_GRAVITY);
-		constants.push(MAX_DEPENETRATION_ITERATIONS);
-		constants.push(MAX_SLOPE);
-		constants.push(STEP_UP_HEIGHT);
-		constants.push(TICKRATE);
-		constants.push(GROUND_PROBE);
-		constants.push(NUM_DIRECTIONS);
-		constants.push(SNAPSHOT_INTERVAL);
-		constants.push(SCHEDULER_TRAIL_SNAP);
-		constants.push(SCHEDULER_TRAIL_BOOST);
-		constants.push(MAX_INTERPOLATION_TICKS);
-		constants.push(CLIENT_DELAY);
-		constants.push(CORRECTION_TICKS);
+		constants.push(worldConstants.GLOBAL_SPEED);
+		constants.push(worldConstants.MAX_DOWN_SPEED);
+		constants.push(worldConstants.GLOBAL_GRAVITY);
+		constants.push(worldConstants.MAX_DEPENETRATION_ITERATIONS);
+		constants.push(worldConstants.MAX_SLOPE);
+		constants.push(worldConstants.STEP_UP_HEIGHT);
+		constants.push(worldConstants.TICKRATE);
+		constants.push(worldConstants.GROUND_PROBE);
+		constants.push(worldConstants.NUM_DIRECTIONS);
+		constants.push(worldConstants.SNAPSHOT_INTERVAL);
+		constants.push(worldConstants.SCHEDULER_TRAIL_SNAP);
+		constants.push(worldConstants.SCHEDULER_TRAIL_BOOST);
+		constants.push(worldConstants.MAX_INTERPOLATION_TICKS);
+		constants.push(worldConstants.CLIENT_DELAY);
+		constants.push(worldConstants.CORRECTION_TICKS);
 
 		// tick
 		constants.push(tick);
@@ -377,39 +346,40 @@ export default class PacketProcessor {
 	}
 
 	static deserializeInitialPacket (data: Uint8Array): InitialPacket {
+		const constants = new Constants();
 		const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
 
 		let offset = 0;
 
-		SET_GLOBAL_SPEED(view.getInt32(offset, true));
+		constants.GLOBAL_SPEED = view.getInt32(offset, true);
 		offset += 4;
-		SET_MAX_DOWN_SPEED(view.getInt32(offset, true));
+		constants.MAX_DOWN_SPEED = view.getInt32(offset, true);
 		offset += 4;
-		SET_GLOBAL_GRAVITY(view.getInt32(offset, true));
+		constants.GLOBAL_GRAVITY = view.getInt32(offset, true);
 		offset += 4;
-		SET_MAX_DEPENETRATION_ITERATIONS(view.getInt32(offset, true));
+		constants.MAX_DEPENETRATION_ITERATIONS = view.getInt32(offset, true);
 		offset += 4;
-		SET_MAX_SLOPE(view.getInt32(offset, true));
+		constants.MAX_SLOPE = view.getInt32(offset, true);
 		offset += 4;
-		SET_STEP_UP_HEIGHT(view.getInt32(offset, true));
+		constants.STEP_UP_HEIGHT = view.getInt32(offset, true);
 		offset += 4;
-		SET_TICKRATE(view.getInt32(offset, true));
+		constants.TICKRATE = view.getInt32(offset, true);
 		offset += 4;
-		SET_GROUND_PROBE(view.getInt32(offset, true));
+		constants.GROUND_PROBE = view.getInt32(offset, true);
 		offset += 4;
-		SET_NUM_DIRECTIONS(view.getInt32(offset, true));
+		constants.NUM_DIRECTIONS = view.getInt32(offset, true);
 		offset += 4;
-		SET_SNAPSHOT_INTERVAL(view.getInt32(offset, true));
+		constants.SNAPSHOT_INTERVAL = view.getInt32(offset, true);
 		offset += 4;
-		SET_SCHEDULER_TRAIL_SNAP(view.getInt32(offset, true));
+		constants.SCHEDULER_TRAIL_SNAP = view.getInt32(offset, true);
 		offset += 4;
-		SET_SCHEDULER_TRAIL_BOOST(view.getInt32(offset, true));
+		constants.SCHEDULER_TRAIL_BOOST = view.getInt32(offset, true);
 		offset += 4;
-		SET_MAX_INTERPOLATION_TICKS(view.getInt32(offset, true));
+		constants.MAX_INTERPOLATION_TICKS = view.getInt32(offset, true);
 		offset += 4;
-		SET_CLIENT_DELAY(view.getInt32(offset, true));
+		constants.CLIENT_DELAY = view.getInt32(offset, true);
 		offset += 4;
-		SET_CORRECTION_TICKS(view.getInt32(offset, true));
+		constants.CORRECTION_TICKS = view.getInt32(offset, true);
 		offset += 4;
 
 		const tick = view.getInt32(offset, true);
@@ -429,6 +399,7 @@ export default class PacketProcessor {
 		}
 
 		return {
+			constants,
 			tick,
 			bodies
 		}

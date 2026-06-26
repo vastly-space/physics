@@ -1,6 +1,5 @@
 import PacketProcessor from "./packetProcessor.js"
 import type { SnapshotChunk, BodyState } from "./packetProcessor.js"
-import { TICKRATE, SNAPSHOT_INTERVAL } from "../constants.js"
 
 export interface Snapshot {
 	tick: number;

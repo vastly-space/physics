@@ -1,10 +1,11 @@
-import { WORLD_MODE, TICKRATE, SNAPSHOT_INTERVAL, SCHEDULER_TRAIL_SNAP, SCHEDULER_TRAIL_BOOST, CLIENT_DELAY } from "./constants.js"
+import Constants from "./constants.js"
 
 type TickListener = (tick: number) => void;
 
 export default class Scheduler {
-	private snapshotInterval = Math.floor(TICKRATE/SNAPSHOT_INTERVAL);
-	private trailBoost: number = SCHEDULER_TRAIL_BOOST/100;
+	private constants: Constants;
+	private snapshotInterval: number;
+	private trailBoost: number;
 	private _tick: number;
 	private offset: number = 0;
 	private last_snapshot: number = 0;
@@ -15,9 +16,12 @@ export default class Scheduler {
 	private tickListeners: Set<TickListener> = new Set();
 	public snapshotReceived: boolean = false;
 
-	constructor (tick: number = 0) {
+	constructor (constants: Constants, tick: number = 0) {
+		this.constants = constants;
 		this._tick = tick;
-		this.baseTickDelay = 1000/TICKRATE;
+		this.baseTickDelay = 1000/constants.TICKRATE;
+		this.snapshotInterval = Math.floor(constants.TICKRATE/constants.SNAPSHOT_INTERVAL)
+		this.trailBoost = constants.SCHEDULER_TRAIL_BOOST/100;
 	}
 
 	get tick (): number {
@@ -43,7 +47,7 @@ export default class Scheduler {
 	}
 
 	doTick () {
-		if (WORLD_MODE === "client" && !this.snapshotReceived) {
+		if (this.constants.WORLD_MODE === "client" && !this.snapshotReceived) {
 			this.timeout = setTimeout(this.doTick.bind(this), this.baseTickDelay);
 			return;	
 		}
@@ -56,7 +60,7 @@ export default class Scheduler {
 			}
 		}
 
-		if (WORLD_MODE === "server") {
+		if (this.constants.WORLD_MODE === "server") {
 			this.last_snapshot++;
 
 			if (this.snapshotListeners.size > 0 && this.last_snapshot >= this.snapshotInterval) {
@@ -71,7 +75,7 @@ export default class Scheduler {
 	}
 
 	adjustSpeed (snapshotTick: number) {
-		const offset = snapshotTick - this._tick - CLIENT_DELAY;
+		const offset = snapshotTick - this._tick - this.constants.CLIENT_DELAY;
 	}
 
 	addSnapshotListener (l: TickListener) {

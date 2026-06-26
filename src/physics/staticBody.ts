@@ -1,9 +1,11 @@
 import Vector3 from "../math/vector3.js"
+import Quaternion from "../math/quaternion.js"
 import AABB from "../math/aabb.js"
 import { Octree } from "../math/octree.js"
 import type { OctItem } from "../math/octree.js"
 import type Shape from "./shape.js"
 import Trimesh from "./shapes/trimesh.js"
+import Constants from "../constants.js"
 
 export type CalculationMode = 'SIMULATE' | 'SNAPSHOT';
 
@@ -12,6 +14,7 @@ export default class StaticBody {
 
 	private _id: number;
 	protected _position: Vector3;
+	protected _quaternion: Quaternion;
 	protected _anchorPos: Vector3;
 	protected _anchorVelocity: Vector3;
 	protected _anchorTick: number;
@@ -24,11 +27,13 @@ export default class StaticBody {
 	protected _layer: number;
 	public _mode: CalculationMode = 'SIMULATE';
 	public dirty: boolean = false;
+	protected _constants!: Constants;
 
 	constructor (id: number, shapes: Shape[], position: Vector3, isTrigger: boolean, layer: number = 0) {
 		this._id = id;
 		this._shapes = shapes;
 		this._position = position.clone();
+		this._quaternion = new Quaternion();
 		this._anchorPos = position.clone();
 		this._prevPos = position.clone();
 		this._anchorVelocity = new Vector3();
@@ -173,5 +178,43 @@ export default class StaticBody {
 					break;
 			}
 		}
+	}
+
+	setRotation (rotation: Vector3) {
+		this._quaternion.setFromEuler(rotation);
+
+		for (const shape of this.shapes) {
+			shape.setRotation(rotation);
+		}
+
+		this.dirty = true;
+	}
+
+	setQuaternion (q: Quaternion) {
+		this._quaternion.copy(q);
+
+		const euler = this._quaternion.toEuler();
+
+		for (const shape of this.shapes) {
+			shape.setRotation(euler);
+		}
+
+		this.dirty = true;
+	}
+
+	get rotation (): Vector3 {
+		return this._quaternion.toEuler();
+	}
+
+	get quaternion (): Quaternion {
+		return this._quaternion.clone();
+	}
+
+	setConstants (val: Constants) {
+		this._constants = val;
+	}
+
+	get constants (): Constants {
+		return this._constants;
 	}
 }

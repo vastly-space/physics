@@ -1,7 +1,6 @@
 import Vector3 from "../math/vector3.js"
 import AABB from "../math/aabb.js"
 import KinematicBody from "./kinematicBody.js"
-import { TICKRATE, GLOBAL_SPEED, CORRECTION_TICKS } from "../constants.js"
 import type Shape from "./shape.js"
 
 import { VecPool } from "../utils/pool.js"
@@ -158,7 +157,7 @@ export default class DynamicBody extends KinematicBody {
 
 			if (!this._velocity.isZero()) this.dirty = true;
 
-			const tickV = VecPool.alloc().copy(this.velocity).scale(TICKRATE/1000);
+			const tickV = VecPool.alloc().copy(this.velocity).scale(this._constants.TICKRATE/1000);
 
 			this._sweptAABB.copy(this._aabb).sweep(tickV);
 
@@ -187,7 +186,7 @@ export default class DynamicBody extends KinematicBody {
 				this._errorStep.set(0,0,0);
 				this._errorTicks = 0;
 			} else {
-				this._errorTicks = Math.floor(CORRECTION_TICKS * this._correctionTicksMultiplier);
+				this._errorTicks = Math.floor(this._constants.CORRECTION_TICKS * this._correctionTicksMultiplier);
 				this._errorStep.set(
 					(this._errorStep.x / this._errorTicks) | 0,
 					(this._errorStep.y / this._errorTicks) | 0,

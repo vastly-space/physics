@@ -1,8 +1,8 @@
 import Vector3 from '../math/vector3.js'
 import { divTrunc } from "../math/utils.js"
 import DynamicBody from "../physics/dynamicBody.js"
-import { getVelocityFromDir } from "./directionsTable.js"
-import { GLOBAL_SPEED } from "../constants.js"
+import DirectionsTable from "./directionsTable.js"
+import Constants from "../constants.js"
 
 export interface ControllerState {
 	forward: boolean;
@@ -12,6 +12,9 @@ export interface ControllerState {
 }
 
 export class Controller {
+	private constants: Constants;
+	private directions: DirectionsTable;
+
 	private _body: DynamicBody;
 	private _speedMultiplier: number = 1;
 	private _state: ControllerState = {
@@ -23,7 +26,10 @@ export class Controller {
 	private _direction: number = 0;
 	private _pitchAngle: number = 0;
 
-	constructor (body: DynamicBody) {
+	constructor (constants: Constants, directions: DirectionsTable, body: DynamicBody) {
+		this.constants = constants;
+		this.directions = directions;
+
 		this._body = body;
 		this._body.isControlledBody = true;
 	}
@@ -95,7 +101,7 @@ export class Controller {
 				rotationAngle: this.getRotationAngle()
 			}
 
-	    	getVelocityFromDir(dir, this._pitchAngle, GLOBAL_SPEED * this._speedMultiplier, this._body.controllerVelocity);
+	    	this.directions.getVelocityFromDir(dir, this._pitchAngle, this.constants.GLOBAL_SPEED * this._speedMultiplier, this._body.controllerVelocity);
 	    } else {
 	    	this._body.controllerVelocity.set(0,0,0);
 	    }

@@ -50,7 +50,7 @@ export default class Trimesh implements Shape {
 		throw new Error("Trimesh should not be projected on axis, use its triangles");
 	}
 
-	setRotation (x: number, y: number, z: number) {
+	setRotation (rotation: Vector3) {
 		// do nothing
 	}
 }

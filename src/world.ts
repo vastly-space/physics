@@ -5,13 +5,12 @@ import { divTrunc } from "./math/utils.js"
 import StaticBody from "./physics/staticBody.js"
 import KinematicBody from "./physics/kinematicBody.js"
 import DynamicBody from "./physics/dynamicBody.js"
-import { Controller } from "./controller/controller.js"
-import { generateDirectionsTable } from "./controller/directionsTable.js"
-import { solve, groundCheck } from "./solver.js"
+import Solver from "./solver.js"
 import type { SolveResult } from "./solver.js"
 import { VecPool } from "./utils/pool.js"
 import Scheduler from "./scheduler.js"
-import { TICKRATE, GLOBAL_GRAVITY, MAX_DOWN_SPEED, WORLD_MODE, MAX_INTERPOLATION_TICKS } from "./constants.js"
+import DirectionsTable from "./controller/directionsTable.js"
+import Constants from "./constants.js"
 
 import PacketProcessor from "./network/packetProcessor.js"
 import type { InitialPacket } from "./network/packetProcessor.js"
@@ -23,6 +22,7 @@ const MaxWorldBox = 2147483647 * 2;
 export interface WorldOptions {
 	worldCubeSize?: number;
 	tick: number;
+	constants?: Constants;
 }
 
 type Body = StaticBody | KinematicBody | DynamicBody;
@@ -47,6 +47,8 @@ export class World {
 		collide: 2
 	}
 
+	public constants: Constants = new Constants();
+	private solver: Solver;
 	private bodyCounter: number = 0;
 	private localBodyCounter: number = -1;
 	private statics: Map<number, StaticBody> = new Map();
@@ -54,12 +56,13 @@ export class World {
 	private kinematics: Map<number, KinematicBody> = new Map();
 	private dynamics: Map<number, DynamicBody> = new Map();
 	private locals: Map<number, DynamicBody> = new Map();
-	private controllers: Map<number, Controller> = new Map();
 	public scheduler: Scheduler;
 	public snapshotBuffer: SnapshotBuffer = new SnapshotBuffer();
 
-	constructor (options: WorldOptions, scheduler: Scheduler | null = null) {
-		generateDirectionsTable();
+	constructor (options: WorldOptions) {
+		if (options.constants !== undefined) this.constants = options.constants;
+
+		this.solver = new Solver(this.constants);
 
 		if (options.worldCubeSize !== undefined && options.worldCubeSize > MaxWorldBox) throw new Error("World cube size extending the limit");
 
@@ -69,13 +72,9 @@ export class World {
 			new Vector3(halfSize, halfSize, halfSize)
 		));
 
-		if (scheduler !== null) {
-			this.scheduler = scheduler;
-		} else {
-			this.scheduler = new Scheduler(options.tick);
-		}
+		this.scheduler = new Scheduler(this.constants, options.tick);
 
-		if (WORLD_MODE === "client") {
+		if (this.constants.WORLD_MODE === "client") {
 			this.snapshotBuffer.onSnapshot = this.processSnapshot.bind(this);
 			this.snapshotBuffer.onServerTick = this.processServerTick.bind(this);
 		}
@@ -100,15 +99,15 @@ export class World {
 				if (d.supportedBy !== -1) {
 					// we have a platform that carries body
 					if (this.kinematics.has(d.supportedBy)) {
-						envVelocity.addScaled(this.kinematics.get(d.supportedBy)!.motionDelta, 1000/TICKRATE);
+						envVelocity.addScaled(this.kinematics.get(d.supportedBy)!.motionDelta, 1000/this.constants.TICKRATE);
 					} else if (this.dynamics.has(d.supportedBy)) {
 						deps[id] = d.supportedBy;
 					}
 				} else {
 					if (d.gravityMultiplier !== 0) {
-						envVelocity.y = d.environmentalVelocity.y - (((GLOBAL_GRAVITY/TICKRATE) * (d.gravityMultiplier/255)) | 0);
+						envVelocity.y = d.environmentalVelocity.y - (((this.constants.GLOBAL_GRAVITY/this.constants.TICKRATE) * (d.gravityMultiplier/255)) | 0);
 
-						if (envVelocity.y < MAX_DOWN_SPEED) envVelocity.y = MAX_DOWN_SPEED;
+						if (envVelocity.y < this.constants.MAX_DOWN_SPEED) envVelocity.y = this.constants.MAX_DOWN_SPEED;
 					}
 				}
 			}
@@ -160,15 +159,15 @@ export class World {
 				if (d.supportedBy !== -1) {
 					// we have a platform that carries body
 					if (this.kinematics.has(d.supportedBy)) {
-						envVelocity.addScaled(this.kinematics.get(d.supportedBy)!.motionDelta, 1000/TICKRATE);
+						envVelocity.addScaled(this.kinematics.get(d.supportedBy)!.motionDelta, 1000/this.constants.TICKRATE);
 					} else if (this.dynamics.has(d.supportedBy)) {
 						envVelocity.add(d.velocity);
 					}
 				} else {
 					if (d.gravityMultiplier !== 0) {
-						envVelocity.y = d.environmentalVelocity.y - (((GLOBAL_GRAVITY/TICKRATE) * (d.gravityMultiplier/255)) | 0);
+						envVelocity.y = d.environmentalVelocity.y - (((this.constants.GLOBAL_GRAVITY/this.constants.TICKRATE) * (d.gravityMultiplier/255)) | 0);
 
-						if (envVelocity.y < MAX_DOWN_SPEED) envVelocity.y = MAX_DOWN_SPEED;
+						if (envVelocity.y < this.constants.MAX_DOWN_SPEED) envVelocity.y = this.constants.MAX_DOWN_SPEED;
 					}
 				}
 			}
@@ -183,7 +182,7 @@ export class World {
 
 		body.preStep();
 
-		const tickResult = solve(body, this.octree, this.statics, this.kinematics, this.dynamics);
+		const tickResult = this.solver.solve(body, this.octree, this.statics, this.kinematics, this.dynamics);
 
 		body.position = tickResult.desiredPosition;
 
@@ -229,7 +228,7 @@ export class World {
 	private moveBySnapshot (body: KinematicBody | DynamicBody) {
 		const anchor = body.getNextAnchor(this.scheduler.tick);
 		const pos = VecPool.alloc();
-		if (anchor === null || this.scheduler.tick > anchor.tick + MAX_INTERPOLATION_TICKS) {
+		if (anchor === null || this.scheduler.tick > anchor.tick + this.constants.MAX_INTERPOLATION_TICKS) {
 			// do nothing
 			pos.copy(body.position);
 		} else if (this.scheduler.tick > anchor.tick) {
@@ -253,7 +252,7 @@ export class World {
 				k.transformations.step(this.scheduler.tick);
 				this.moveBySnapshot(k);
 			} else {
-				k.scriptPos = k.transformations.step(this.scheduler.tick);
+				k.transformations.step(this.scheduler.tick);
 				k.preStep();
 			}
 		}
@@ -280,11 +279,11 @@ export class World {
 
 	    // ground check
     	for (const [id, d] of this.dynamics.entries()) {
-	    	groundCheck(d, this.octree, this.statics, this.kinematics, this.dynamics);
+	    	this.solver.groundCheck(d, this.octree, this.statics, this.kinematics, this.dynamics);
 	    }
 
 	    for (const [id, d] of this.locals.entries()) {
-	    	groundCheck(d, this.octree, this.statics, this.kinematics, this.dynamics);
+	    	this.solver.groundCheck(d, this.octree, this.statics, this.kinematics, this.dynamics);
 	    }
 
 	    this.clampCoordinates();
@@ -340,6 +339,8 @@ export class World {
 	}
 
 	addBody (body: Body) {
+		body.setConstants(this.constants);
+
 		switch (body.kind) {
 			case "static":
 				this.statics.set(body.id, body as StaticBody);
@@ -359,10 +360,6 @@ export class World {
 		body.prevTick = this.scheduler.tick;
 	}
 
-	addController (bodyId: number, controller: Controller) {
-		this.controllers.set(bodyId, controller);
-	}
-
 	deleteBody (id: number) {
 		if (this.kinematics.has(id)) {
 			this.kinematics.delete(id);
@@ -370,7 +367,6 @@ export class World {
 		if (this.dynamics.has(id)) {
 			this.dynamics.delete(id);
 		}
-		this.controllers.delete(id);
 		for (const body of this.dynamics.values()) {
 			if (body.supportedBy === id) {
 				body.supportedBy = -1;
@@ -379,6 +375,7 @@ export class World {
 	}
 
 	addLocalBody (body: DynamicBody) {
+		body.setConstants(this.constants);
 		this.locals.set(body.id, body);
 	}
 
@@ -408,14 +405,6 @@ export class World {
 		return result;
 	}
 
-	deleteController (id: number) {
-		this.controllers.delete(id);
-	}
-
-	getController (id: number): Controller | undefined {
-		return this.controllers.get(id);
-	}
-
 	get nextBodyId (): number {
 		return this.bodyCounter++;
 	}
@@ -433,7 +422,7 @@ export class World {
 	}
 
 	get initialPacket (): Uint8Array {
-		return PacketProcessor.serializeInitialPacket(this.tick, this.statics, this.kinematics, this.dynamics);
+		return PacketProcessor.serializeInitialPacket(this.constants, this.tick, this.statics, this.kinematics, this.dynamics);
 	}
 
 	processSnapshot (snapshot: Snapshot) {
@@ -456,10 +445,14 @@ export class World {
 		this.scheduler.adjustSpeed(tick);
 	}
 
+	generateDirectionsTable () {
+		return new DirectionsTable(this.constants);
+	}
+
 	static buildFromInitialPacket (raw: Uint8Array): World {
 		const packet = PacketProcessor.deserializeInitialPacket(raw);
 
-		const result = new World({ tick: packet.tick });
+		const result = new World({ tick: packet.tick, constants: packet.constants });
 
 		for (const body of packet.bodies) {
 			body.mode = "SNAPSHOT";

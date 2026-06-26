@@ -1,4 +1,5 @@
 import { divTrunc } from "./utils.js"
+import type Quaternion from "./quaternion.js"
 
 export default class Vector3 {
 	private _x: number;
@@ -168,6 +169,36 @@ export default class Vector3 {
 		this._x /= len;
 		this._y /= len;
 		this._z /= len;
+
+		return this;
+	}
+
+	applyQuaternion (q: Quaternion): Vector3 {
+		const vx = this.x;
+		const vy = this.y;
+		const vz = this.z;
+
+		const tx = 2 * (q.y * vz - q.z * vy);
+		const ty = 2 * (q.z * vx - q.x * vz);
+		const tz = 2 * (q.x * vy - q.y * vx);
+
+		this.x =
+			vx +
+			q.w * tx +
+			q.y * tz -
+			q.z * ty;
+
+		this.y =
+			vy +
+			q.w * ty +
+			q.z * tx -
+			q.x * tz;
+
+		this.z =
+			vz +
+			q.w * tz +
+			q.x * ty -
+			q.y * tx;
 
 		return this;
 	}
